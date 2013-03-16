@@ -1,0 +1,19 @@
+#include "nsISupports.idl"
+
+[scriptable, uuid(10ddabc0-1c67-4523-9fab-0333b84ab754)]
+interface nsISENSCallback: nsISupports {
+  boolean call(in PRUint32 bogus, in string msg);
+};
+
+[scriptable, uuid(ce6affde-5b3a-445e-a138-3de7ad0178e3)]
+interface nsISTUtils: nsISupports {
+  void setSENSCallback(in nsISENSCallback aCallback);
+  void setValToINI(in string inifile, in string section, in string key, in string val);
+  string getValFromINI(in string inifile, in string section, in string key);
+  boolean createShortCut(in string exepath, in string args, in string lnkpath, in string iconpath);
+	void refreshDesktop();
+	string getSystemInfo(in string cmd, in string prop);
+	readonly attribute string username;
+	readonly attribute string domain;
+  readonly attribute string sid;
+};

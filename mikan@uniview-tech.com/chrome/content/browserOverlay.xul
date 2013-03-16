@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://mikan/content/mikan-browserOverlay.css" type="text/css"?>
+
+<overlay id="mikanOverlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+<script type="application/x-javascript">
+<![CDATA[function mikanObject() {}]]>
+</script>
+
+<script type="application/x-javascript" src="chrome://mikan/content/browserOverlay.js"/>
+
+  <toolbar id="nav-bar" hidden="false" >
+    <toolbaritem id="mikan-item" >
+    <toolbarbutton type="menu" id="mikan-button" label="MiKan" tooltiptext="share this video with MiKan" orient="vertical">
+			<menupopup>
+				<menuitem label="Share this video" oncommand="gMK.doShare();" image="chrome://mikan/skin/share.png" />
+				<menuitem label="Save video to MiKan" oncommand = "gMK.doMiKan();" image="chrome://mikan/skin/save.png" />
+				<menuitem label="Play to TV" oncommand="gMK.doPlay();" image="chrome://mikan/skin/play.png" />
+				<menuseparator id="mkseparator" hidden="true"/>
+				<menuitem id="mklogout" label="Logout" oncommand="gMK.doLogout();" hidden="true" image="chrome://mikan/skin/logout.png" />
+			</menupopup>
+		</toolbarbutton>
+		</toolbaritem>
+  </toolbar>
+
+  <!--toolbaritem id="unified-back-forward-button" hidden="false" >
+    <toolbarbutton id="mikan-button" label="MiKan" tooltiptext="share this video with MiKan" oncommand="gMK.doMiKan();" orient="vertical"/>
+  </toolbaritem-->
+<!--vbox id='appmenuPrimaryPane'>
+	<menuitem id='cn-menuitem' class="menuitem-iconic" label='Check it Now' insertbefore='appmenu_fullScreen' oncommand='gMK.doCheck(event);' />
+</vbox-->
+</overlay>

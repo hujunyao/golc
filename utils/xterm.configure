@@ -1,0 +1,1 @@
+./configure --prefix=/usr --enable-256-color --enable-paste64 --with-pcre --disable-rightbar --disable-samename --disable-session-mgt --disable-vt52 --enable-wide-chars --disable-ziconbeep --disable-rectangles

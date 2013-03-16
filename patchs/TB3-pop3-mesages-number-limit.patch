@@ -1,0 +1,44 @@
+commit b372033a29f7c504db1bf50981efdeb2ef21040e
+Author: user <user@localhost.(none)>
+Date:   Tue Apr 6 15:35:31 2010 +0800
+
+    add message number limit to POP3 protocol
+
+diff --git a/mailnews/local/src/nsPop3Protocol.cpp b/mailnews/local/src/nsPop3Protocol.cpp
+index 5cc9e9a..0fb7c46 100644
+--- a/mailnews/local/src/nsPop3Protocol.cpp
++++ b/mailnews/local/src/nsPop3Protocol.cpp
+@@ -2526,6 +2526,22 @@ PRInt32 nsPop3Protocol::GetUidlList(nsIInputStream* inputStream,
+ PRInt32 nsPop3Protocol::GetMsg()
+ {
+   PRInt32 popstateTimestamp = TimeInSecondsFromPRTime(PR_Now());
++  PRInt32 mailCountGetFromServer = 0;
++  nsresult rv;
++
++  nsCOMPtr<nsIMsgIncomingServer> server = do_QueryInterface(m_pop3Server, &rv);
++  if(server) {
++    nsCString serverKey;
++    server->GetKey(serverKey);
++    serverKey.Append(".mail_count_get_from_server");
++    nsCOMPtr <nsIPrefService> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
++    NS_ENSURE_SUCCESS(rv,rv);
++    nsCOMPtr<nsIPrefBranch> prefBranch;
++    rv = prefs->GetBranch("mail.server.", getter_AddRefs(prefBranch));
++    NS_ENSURE_SUCCESS(rv,rv);
++    prefBranch->GetIntPref(serverKey.get(), &mailCountGetFromServer);
++    printf("key = %s, value = %d\n", serverKey.get(), mailCountGetFromServer);
++  }
+ 
+   if (m_pop3ConData->last_accessed_msg >= m_pop3ConData->number_of_messages)
+   {
+@@ -2788,6 +2804,10 @@ PRInt32 nsPop3Protocol::GetMsg()
+         }
+       }
+ 
++      if (m_pop3ConData->last_accessed_msg < (m_pop3ConData->number_of_messages - mailCountGetFromServer)) {
++        m_pop3ConData->next_state = POP3_GET_MSG;
++      }
++
+       if (m_pop3ConData->next_state != POP3_SEND_DELE &&
+           info->uidl)
+       {

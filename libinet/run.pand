@@ -1,0 +1,27 @@
+#!/bin/bash
+
+IPTABLES='/sbin/iptables'
+
+# Set interface values
+EXTIF='eth0'
+
+# enable ip forwarding in the kernel
+/bin/echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# flush rules and delete chains
+$IPTABLES -F
+$IPTABLES -X
+
+# enable masquerading to allow LAN internet access
+$IPTABLES -t nat -A POSTROUTING -o $EXTIF -j MASQUERADE
+
+# forward LAN traffic from $INTIF1 to Internet interface $EXTIF
+$IPTABLES -A FORWARD -i bnep0 -o $EXTIF -m state --state NEW,ESTABLISHED -j ACCEPT
+$IPTABLES -A FORWARD -i bnep1 -o $EXTIF -m state --state NEW,ESTABLISHED -j ACCEPT
+$IPTABLES -A FORWARD -i bnep2 -o $EXTIF -m state --state NEW,ESTABLISHED -j ACCEPT
+$IPTABLES -A FORWARD -i bnep3 -o $EXTIF -m state --state NEW,ESTABLISHED -j ACCEPT
+$IPTABLES -A FORWARD -i bnep4 -o $EXTIF -m state --state NEW,ESTABLISHED -j ACCEPT
+$IPTABLES -A FORWARD -i bnep5 -o $EXTIF -m state --state NEW,ESTABLISHED -j ACCEPT
+
+pand -s --role NAP --master -u /usr/bin/bnepup -o /usr/bin/bnepdown
+/usr/bin/bnepd

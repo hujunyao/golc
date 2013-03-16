@@ -1,0 +1,8 @@
+#include "nsISupports.idl"
+
+interface nsIBaseWindow;
+
+[scriptable, uuid(097ecc80-4c4e-478f-83d5-f6630d20cdbd)]
+interface nsICNUtils: nsISupports {
+  void doCheck(in nsIBaseWindow aMainWindow);
+};

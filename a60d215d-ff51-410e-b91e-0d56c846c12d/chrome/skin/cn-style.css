@@ -1,0 +1,11 @@
+#checknow-status-image {
+  list-style-image: url("chrome://checknow/skin/cn-status-icon.png");
+}
+
+#cn-menuitem {
+  list-style-image: url("chrome://checknow/skin/cn-status-icon.png");
+}
+
+#cn-menuitem {
+  -moz-image-region: rect(0 16px 16px 0);
+}

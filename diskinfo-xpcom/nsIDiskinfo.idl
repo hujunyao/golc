@@ -1,0 +1,16 @@
+#include "nsISupports.idl"
+
+[scriptable, uuid(2b277d42-93f4-4425-b0e3-b7b38ae6d094)]
+interface nsIMyCleanupCallback : nsISupports {
+  boolean call(in PRUint32 bogus, in PRUint32 key);
+};
+
+[scriptable, uuid(150a052f-5e4b-438c-9bc7-f684a6070082)]
+interface nsIDiskinfo : nsISupports {
+	long getMountPointFreeInfo(in wstring mntpath, out PRUint32 totalMB);
+  string getEnv(in string env);
+  void initCleanup();
+  void addCleanupItem(in PRUint32 key, in PRTime date);
+  void doCleanup(in PRInt32 cnt, in nsIMyCleanupCallback aCallback);
+};
+

@@ -1,0 +1,45 @@
+#include "nsISupports.idl"
+
+interface nsIBaseWindow;
+
+[scriptable, uuid(49265e76-3cc8-4d37-b731-669ea26d09b2)]
+interface nsIAppWatchCallback : nsISupports {
+  boolean call(in PRUint32 bogus, in PRUint32 sta);
+};
+
+[scriptable, uuid(2f31ccdb-6a39-4d8e-83cc-b7cbe2517eed)]
+interface nsIWindowEventFilterCallback: nsISupports {
+  boolean call(in PRUint32 bogus, in string type);
+};
+
+[scriptable, uuid(4f40e4d9-dbe8-4f81-8c3f-d6235aa7aa3e)]
+interface nsIMsgCleanupCallback: nsISupports {
+  boolean call(in PRUint32 bogus, in string args);
+};
+
+[scriptable, uuid(7952142f-41d4-45bc-98c9-e357b1b13214)]
+interface nsITrayPopupMenuCallback: nsISupports {
+  boolean call(in PRUint32 bogus, in string menu);
+};
+
+[scriptable, uuid(acad5005-4d90-49e5-a389-b2b747c900f0)]
+interface nsIJSUtils : nsISupports {
+  boolean launch(in string exec,in string args, in PRBool async, in nsIAppWatchCallback aCallback);
+
+  void doWindowAction(in nsIBaseWindow aMainWindow, in string action);
+  void showTray(in nsIBaseWindow aMainWindow);
+  void hideTray();
+  void setWindowEventFilter(in nsIBaseWindow aBaseWindow, in nsIWindowEventFilterCallback aCallback);
+  void setTrayPopupMenuCallback(in nsITrayPopupMenuCallback aCallback);
+
+  void setGtkSettingsLongProp(in string name, in PRInt32 val);
+  void showDiskWarningNotification(in nsIBaseWindow aParent, in PRUint32 pcntLimit, in nsIMsgCleanupCallback aCallback, in PRUint32 totalMsg);
+  void showAccountWarningDialog(in nsIBaseWindow aParent, in PRInt32 maxAcct);
+  void addKeyValue(in string skey, in string akey);
+  void removeKeyValue(in string skey);
+  string getValueByKey(in string skey);
+  void dumpKeyValue();
+
+  wstring getPO(in string domain, in string enstr);
+  wstring getPO2(in string domain, in string enstr, in PRInt32 val);
+};

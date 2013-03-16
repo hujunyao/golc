@@ -1,0 +1,48 @@
+#userlabel{
+	padding:8px 2px 8px 2px;
+}
+
+#passwdlabel {
+	padding:6px 2px 8px 2px;
+}
+
+#loginbtn {
+	padding: 0px 2px 8px 2px;
+}
+
+#reglink {
+	padding: 0px 0px 3px 220px;
+}
+
+a {
+	color:#4cb376;
+	text-decoration:underline;
+}
+
+a:focus { outline:0; }
+
+a:hover {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.share-btn {
+	margin: 0px 36px 0px 36px;
+}
+
+#weibo-share-btn {
+	list-style-image: url('chrome://mikan/content/weibo-button.png');
+}
+
+#play-mikan-label {
+	padding: 8px 0px 0px 18px;
+}
+
+#play-mikan-menulist {
+	padding: 0px 16px 0px 0px;
+}
+
+#play-vbox {
+	padding: 8px 100px 0px 100px;
+}
+

@@ -1,0 +1,13 @@
+#include "nsISupports.idl"
+
+[scriptable, uuid(842cfd56-cbfb-4b6a-ac91-9201e78d206f)]
+interface nsIOnReadCallback : nsISupports {
+  boolean call(in PRUint32 bogus, in string msg);
+};
+
+[scriptable, uuid(b3eed5a6-a580-43ba-a4f4-c27cf27bbd5c)]
+interface nsITCPConn : nsISupports {
+  void setOnReadCallback(in nsIOnReadCallback aCallback);
+  boolean openTCPConn(in string ipaddr, in PRUint32 port);
+  boolean sendMessage(in string msg);
+};

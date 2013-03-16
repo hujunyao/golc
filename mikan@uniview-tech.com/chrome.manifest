@@ -1,0 +1,13 @@
+#interfaces components/libcnutils.xpt
+
+#component {097ecc80-4c4e-478f-83d5-f6630d20cdbd} components/libcnutils.dll
+#contract  @wuruxu.com/cnutils;1 {097ecc80-4c4e-478f-83d5-f6630d20cdbd}
+
+#binary-component components/libcnutils.dll ABI=WINNT_x86-msvc
+#category profile-after-change CNUtils @wuruxu.com/cnutils;1
+
+overlay	chrome://browser/content/browser.xul	chrome://mikan/content/browserOverlay.xul
+
+content	mikan chrome/content/
+
+skin	mikan classic/1.0	chrome/skin/

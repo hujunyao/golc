@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<?xml-stylesheet href="chrome://mikan/content/mikan.css" type="text/css"?>
+
+<window id="MiKanWindow"
+        xmlns:html="http://www.w3.org/1999/xhtml"
+        xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+        title="Welcome to MiKan"
+				orient="horizontal"
+        windowtype="MiKan:Main">
+  
+	<script type="application/x-javascript">
+	<![CDATA[function mikanPlayObject() {}]]>
+	</script>
+  <script type="application/javascript" src="chrome://mikan/content/play.js"/>
+	<vbox id="loginbox" flex="1">
+		<image src="chrome://mikan/content/mikan-banner.png" />
+		<vbox>
+			<hbox>
+			<label id="play-mikan-label" value="Select your MiKan TV" flex="0" />
+			<menulist id="play-mikan-menulist" flex="1">
+				<menupopup id="play-mikan-tvlist">
+					<menuitem id="play-tv1" label="MiKan01" hidden="true" />
+					<menuitem id="play-tv2" label="MiKan02" hidden="true" />
+					<menuitem id="play-tv3" label="MiKan03" hidden="true"/>
+					<menuitem id="play-tv4" label="MiKan04" hidden="true"/>
+				</menupopup>
+			</menulist>
+			</hbox>
+			<vbox id="play-vbox">
+			<button id="play-button" label="Play" orient="vertical" image="chrome://mikan/content/play.png" oncommand="mkPlay.doCommand();"/>
+			</vbox>
+		</vbox>
+	</vbox>
+</window>

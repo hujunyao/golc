@@ -1,0 +1,78 @@
+diff --git a/src/compositor/compositor-xrender.c b/src/compositor/compositor-xrender.c
+index 8c06d1f..97f544a 100644
+--- a/src/compositor/compositor-xrender.c
++++ b/src/compositor/compositor-xrender.c
+@@ -795,8 +795,55 @@ root_tile (MetaScreen *screen)
+ 
+   if (!pixmap) 
+     {
+-      pixmap = XCreatePixmap (xdisplay, xroot, 1, 1, 
+-                              DefaultDepth (xdisplay, screen_number));
++      GdkPixbuf *_pixbuf = NULL;
++      XImage *_ximage = NULL;
++      GC gc;
++      XGCValues values;
++      int _depth = XDefaultDepth(xdisplay, XDefaultScreen(xdisplay));
++      int _bitmap_pad = 8, nchannel = 0, i, j, rowstride = 0;
++      GdkScreen *screen = gdk_screen_get_default();
++      int _width = gdk_screen_get_width(screen);
++      int _height = gdk_screen_get_height(screen);
++      unsigned char *pixdata = NULL, *srcdata = NULL, *ptr = NULL, *rowptr = NULL;
++
++      if(_depth > 16)
++        _bitmap_pad = 32;
++      else if(_depth > 8)
++        _bitmap_pad = 16;
++
++      _pixbuf = gdk_pixbuf_new_from_file_at_size("/home/user/.icewm/test.png", _width, _height, NULL);
++      pixdata = g_malloc0((_width * _height)<<2);
++      nchannel = gdk_pixbuf_get_n_channels(_pixbuf);
++      rowstride = gdk_pixbuf_get_rowstride(_pixbuf);
++      srcdata = gdk_pixbuf_get_pixels(_pixbuf);
++
++      for(i=0, ptr = pixdata; i<_height; i++, srcdata += rowstride) {
++        for(j=0, rowptr = srcdata; j<_width; j++, ptr+=4) {
++          *(ptr+0) = *(rowptr+2);
++          *(ptr+1) = *(rowptr+1);
++          *(ptr+2) = *(rowptr+0);
++          if(nchannel == 4) {
++            *(ptr+3) = *(rowptr+3);
++            rowptr += 4;
++          } else {
++            *(ptr+3) = 255;
++            rowptr += 3;
++          }
++        }
++      }
++      printf("pixbuf = %x nchannel = %d, rowstride = %d\n", (unsigned int)_pixbuf, nchannel, rowstride);
++      _ximage = XCreateImage(xdisplay, XDefaultVisual(xdisplay, XDefaultScreen(xdisplay)), _depth,
++                           ZPixmap, 0, (char *)pixdata, _width, _height, _bitmap_pad, 0);
++      pixmap = XCreatePixmap(xdisplay, xroot, _ximage->width, _ximage->height, _ximage->depth);
++
++      values.foreground = 1;
++      values.background = 0;
++      gc = XCreateGC(xdisplay, pixmap, GCForeground | GCBackground, &values);
++      XPutImage(xdisplay, pixmap, gc, _ximage, 0, 0, 0, 0, _ximage->width, _ximage->height);
++
++      XFreeGC(xdisplay, gc);
++      g_free(pixdata);
++
+       g_return_val_if_fail (pixmap != None, None);
+       fill = TRUE;
+     }
+@@ -809,6 +856,7 @@ root_tile (MetaScreen *screen)
+   picture = XRenderCreatePicture (xdisplay, pixmap, format, CPRepeat, &pa);
+   if ((picture != None) && (fill)) 
+     {
++#if 0
+       XRenderColor c;
+ 
+       /* Background default to just plain ugly grey */
+@@ -818,6 +866,7 @@ root_tile (MetaScreen *screen)
+       c.alpha = 0xffff;
+       
+       XRenderFillRectangle (xdisplay, PictOpSrc, picture, &c, 0, 0, 1, 1);
++#endif
+       XFreePixmap (xdisplay, pixmap); 
+     }
+ 

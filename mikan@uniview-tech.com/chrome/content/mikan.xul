@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+<?xml-stylesheet href="chrome://mikan/content/mikan.css" type="text/css"?>
+
+<window id="MiKanWindow"
+        xmlns:html="http://www.w3.org/1999/xhtml"
+        xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+        title="Welcome to MiKan"
+				orient="horizontal"
+        windowtype="MiKan:Main">
+  
+	<script type="application/x-javascript">
+	<![CDATA[function mikanLoginObject() {}]]>
+	</script>
+  <script type="application/javascript" src="chrome://mikan/content/mikan.js"/>
+	<vbox id="loginbox" flex="1">
+		<image src="chrome://mikan/content/mikan-banner.png" />
+		<hbox flex="1">
+		<vbox flex="0">
+		  <label id="userlabel" value="Username:" />
+		  <label id="passwdlabel" value="Password:"/>
+		</vbox>
+		<vbox flex="1">
+		  <textbox id="username" />
+		  <textbox id="password" type="password" />
+		</vbox>
+		</hbox>
+		<vbox id="reglink">
+		<html:a id="reglinka" href="http://www.baidu.com" target="_blank">New Account</html:a>
+		</vbox>
+		<hbox id="loginbtn" flex="0">
+			<button id="login-ok" label="Login" flex="1" oncommand="mkLogin.doLogin();"/>
+		</hbox>
+	</vbox>
+  <!--vbox id="mkvbox" flex="1" hidden="true">
+    <button id="share-button" type="menu" label="Share this video to">
+			<menupopup>
+				<menuitem label="Sina Weibo" class="menuitem-iconic" image="sina-weibo.png" />
+				<menuitem label="QQ Weibo" class="menuitem-iconic" image="qq-weibo.png" />
+			</menupopup>
+    </button>
+		<button id="saveurl-button" label="Save this video" />
+		<button id="playurl-button" label="Play to TV" oncommand="mkLogin.doPlay();"/>
+  </vbox-->
+</window>

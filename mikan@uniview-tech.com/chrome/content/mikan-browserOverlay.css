@@ -1,0 +1,12 @@
+@namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
+
+#mikan-button {
+	list-style-image: url("chrome://mikan/content/mikan-button-24.png");
+}
+
+toolbar[iconsize="small"] #mikan-button {
+	list-style-image: url("chrome://mikan/content/mikan-button-16.png");
+}
+#mikan-button > .toolbarbutton-menu-dropmarker {
+  display: none;
+}

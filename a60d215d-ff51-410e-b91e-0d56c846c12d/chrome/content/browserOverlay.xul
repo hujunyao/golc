@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://checknow/skin/cn-style.css" type="text/css"?>
+
+<overlay id="checknowOverlay" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+<script type="application/x-javascript">
+<![CDATA[function CheckNowObject() {}]]>
+</script>
+
+<script type="application/x-javascript" src="chrome://checknow/content/browserOverlay.js"/>
+
+<vbox id='appmenuPrimaryPane'>
+	<menuitem id='cn-menuitem' class="menuitem-iconic" label='Check it Now' insertbefore='appmenu_fullScreen' oncommand='gCN.doCheck(event);' />
+</vbox>
+<statusbar id="status-bar">
+   <deck id="checknow-status-deck" persist="insertbefore insertafter">
+   <!--statusbarpanel id="checknow-status" onclick="gCN.doCheck(event);"-->
+   <statusbarpanel id="checknow-status" >
+      <image id="checknow-status-image" />
+			<label></label>
+   </statusbarpanel>
+   </deck>
+</statusbar>
+</overlay>

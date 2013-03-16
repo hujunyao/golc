@@ -1,0 +1,42 @@
+commit 23796c2d3e25c9921dbd872350441b5b7d9372e0
+Author: user <user@localhost.(none)>
+Date:   Tue Apr 6 10:20:41 2010 +0800
+
+    patch for number limit for imap message
+
+diff --git a/mailnews/imap/src/nsImapMailFolder.cpp b/mailnews/imap/src/nsImapMailFolder.cpp
+index 3f3e075..beb4712 100644
+--- a/mailnews/imap/src/nsImapMailFolder.cpp
++++ b/mailnews/imap/src/nsImapMailFolder.cpp
+@@ -4196,6 +4196,18 @@ void nsImapMailFolder::FindKeysToAdd(const nsTArray<nsMsgKey> &existingKeys, nsT
+   int dbIndex=0; // current index into existingKeys
+   PRInt32 existTotal, numberOfKnownKeys;
+   PRInt32 messageIndex;
++  PRInt32 mailCountGetFromServer = 0;
++  nsresult rv;
++  nsCString serverKey;
++  PRInt32 flagIndex = 0;
++
++  GetServerKey(serverKey);
++  serverKey.Append(".mail_count_get_from_server");
++  nsCOMPtr <nsIPrefService> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID, &rv);
++  nsCOMPtr<nsIPrefBranch> prefBranch;
++  rv = prefs->GetBranch("mail.server.", getter_AddRefs(prefBranch));
++  prefBranch->GetIntPref(serverKey.get(), &mailCountGetFromServer);
++  printf("IMAP:key = %s, value = %d\n", serverKey.get(), mailCountGetFromServer);
+ 
+   numNewUnread = 0;
+   existTotal = numberOfKnownKeys = existingKeys.Length();
+@@ -4203,7 +4215,11 @@ void nsImapMailFolder::FindKeysToAdd(const nsTArray<nsMsgKey> &existingKeys, nsT
+   PRBool partialUIDFetch;
+   flagState->GetPartialUIDFetch(&partialUIDFetch);
+ 
+-  for (PRInt32 flagIndex=0; flagIndex < messageIndex; flagIndex++)
++  printf("messageIndex = %d\n", messageIndex);
++  if(mailCountGetFromServer && (messageIndex > mailCountGetFromServer)) {
++    flagIndex = messageIndex - mailCountGetFromServer ;
++  }
++  for (; flagIndex < messageIndex; flagIndex++)
+   {
+     PRUint32 uidOfMessage;
+     flagState->GetUidOfMessage(flagIndex, &uidOfMessage);

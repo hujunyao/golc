@@ -1,0 +1,63 @@
+commit 5fe5fc090533e90eb2bf1a6542fd454a4b85f9a4
+Author: user <user@localhost.(none)>
+Date:   Tue Apr 6 10:24:18 2010 +0800
+
+    add support to hide ui when startup
+
+diff --git a/mozilla/widget/src/gtk2/nsWindow.cpp b/mozilla/widget/src/gtk2/nsWindow.cpp
+index b9cca02..d884349 100644
+--- a/mozilla/widget/src/gtk2/nsWindow.cpp
++++ b/mozilla/widget/src/gtk2/nsWindow.cpp
+@@ -86,7 +86,6 @@
+ #include "nsIAccessibilityService.h"
+ #include "nsIAccessibleRole.h"
+ #include "nsIAccessibleEvent.h"
+-#include "prenv.h"
+ #include "stdlib.h"
+ static PRBool sAccessibilityChecked = PR_FALSE;
+ /* static */
+@@ -95,6 +94,8 @@ static const char sSysPrefService [] = "@mozilla.org/system-preference-service;1
+ static const char sAccEnv [] = "GNOME_ACCESSIBILITY";
+ static const char sAccessibilityKey [] = "config.use_system_prefs.accessibility";
+ #endif
++#include "prenv.h"
++#include "plstr.h"
+ 
+ /* For SetIcon */
+ #include "nsAppDirectoryServiceDefs.h"
+@@ -142,6 +143,7 @@ D_DEBUG_DOMAIN( ns_Window, "nsWindow", "nsWindow" );
+ 
+ /* For PrepareNativeWidget */
+ static NS_DEFINE_IID(kDeviceContextCID, NS_DEVICE_CONTEXT_CID);
++static GtkWindow *sMainWindow = NULL;
+ 
+ /* utility functions */
+ static PRBool     check_for_rollup(GdkWindow *aWindow,
+@@ -4396,6 +4398,7 @@ nsWindow::NativeShow (PRBool  aAction)
+         mNeedsShow = PR_FALSE;
+ 
+         if (mIsTopLevel) {
++           GtkWindow *wnd = GTK_WINDOW(mShell);
+             // Set up usertime/startupID metadata for the created window.
+             if (mWindowType != eWindowType_invisible) {
+                 SetUserTimeAndStartupIDForActivatedWindow(mShell);
+@@ -4403,7 +4406,18 @@ nsWindow::NativeShow (PRBool  aAction)
+ 
+             moz_drawingarea_set_visibility(mDrawingarea, aAction);
+             gtk_widget_show(GTK_WIDGET(mContainer));
+-            gtk_widget_show(mShell);
++
++            if(sMainWindow == NULL && PL_strcmp(wnd->wmclass_class, "Thunderbird") == 0 && PL_strcmp(wnd->wmclass_name, "Toplevel") == 0) {
++              char *hideui = PR_GetEnv("TB3_HIDEUI_STARTUP");
++              sMainWindow = wnd;
++              if(hideui && (PL_strcmp(hideui, "true")==0)) {
++                gtk_widget_realize(GTK_WIDGET(wnd));
++              } else {
++                gtk_widget_show(mShell);
++              }
++            } else {
++              gtk_widget_show(mShell);
++            }
+         }
+         else if (mContainer) {
+             moz_drawingarea_set_visibility(mDrawingarea, TRUE);

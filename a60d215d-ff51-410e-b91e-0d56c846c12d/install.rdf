@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:em="http://www.mozilla.org/2004/em-rdf#">
+
+ <Description about="urn:mozilla:install-manifest">
+
+   <em:id>{a60d215d-ff51-410e-b91e-0d56c846c12d}</em:id>
+   <em:name>Check it Now</em:name>
+   <em:version>1.01</em:version>
+   <em:description>Check it Now before submit to EST.</em:description>
+   <em:creator>wrxzzj@gmail.com</em:creator>
+   <em:type>2</em:type>
+   <em:homepageURL>http://hi.baidu.com/wrxzzj</em:homepageURL>
+   <em:iconURL>chrome://checknow/skin/cn-logo.png</em:iconURL>
+   <em:unpack>true</em:unpack>
+
+   <!-- Firefox -->
+   <em:targetApplication>
+     <Description>
+       <em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
+       <em:minVersion>3.5</em:minVersion>
+       <em:maxVersion>4.0.*</em:maxVersion>
+     </Description>
+   </em:targetApplication>
+ </Description>
+</RDF>
