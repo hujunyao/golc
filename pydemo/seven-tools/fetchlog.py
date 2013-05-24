@@ -78,7 +78,7 @@ if __name__ == '__main__':
   for log in logfiles:
     dt = currsec - os.stat(log).st_mtime
     if dt > minsec and dt < maxsec:
-      print log
+      #print log
       if zfpre == '':
         arcname = os.path.basename(log)
         zf.write(log, arcname)

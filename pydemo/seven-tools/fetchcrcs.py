@@ -27,12 +27,35 @@ def do_search_logfile(log, user):
     tmv = datetime.strptime(tms, '%Y-%m-%d  %H:%M:%S.%f')
 
 def zip_appcrcslog(zf, log, user, app, appcrcs):
-  print log, app
+  #print log, app
   fd = open(log)
+  wifiline = ''
+  sline = ''
+  is_wifi = False
+  prev_is_wifi = False
   for line in fd:
-    if line.find(app)  >= 0 and line.find(user) >= 0:
-      #print line
+    info = line.split(',')
+    r = line.find(user)
+    if r > 0:
       appcrcs.write(line)
+      #if info[2] == 'netlog':
+      #  nettype = info[16]
+      #  if nettype == 'wifi':
+      #    is_wifi = True
+      #    wifiline = line
+      #  else:
+      #    is_wifi = False
+
+      #  if prev_is_wifi != is_wifi:
+      #    prev_is_wifi = is_wifi
+      #    if is_wifi:
+      #      sline = line
+      #    else:
+      #      netinfo.write('S,'+sline)
+      #      netinfo.write('E,'+wifiline)
+
+      #if line.find(app)  > 0 :
+      #  #print line
 
 def getlogfiles(t):
   s = int(t[4:]) + 26
@@ -91,11 +114,12 @@ if __name__ == '__main__':
   currsec = time.time()
   zf = zipfile.ZipFile('/tmp/crcs.zip', 'w', zipfile.zlib.DEFLATED)
   hostname = os.uname()[1]
-  basename = hostname+'-'+user +'-'+ app+'.crcs'
+  basename = hostname+'-'+user +'.crcs'
 
   if app != '' or user != '':
     appcrcs = open('/tmp/'+basename, 'w')
 
+  #netinfo = open('/tmp/'+basename[:-5]+'.netinfo', 'w')
   for log in logfiles:
     dt = currsec - os.stat(log).st_mtime
     if dt > minsec and dt < maxsec:
@@ -109,5 +133,9 @@ if __name__ == '__main__':
 
   if app != '' or user != '':
     zf.write('/tmp/'+basename, basename)
+    appcrcs.close()
+
+  #zf.write('/tmp/'+basename[:-5]+'.netinfo', basename[:-5]+'.netinfo')
+  #netinfo.close()
 
   zf.close()
