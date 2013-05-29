@@ -23,7 +23,7 @@ if __name__ == '__main__':
   os.system('rm -rf logdb/*.sqlite')
   os.system('rm -rf logdb/*.crcs')
   os.system('rm -rf logdb/*.pcap')
-  os.system('rm -rf logdb/*.zip')
+#  os.system('rm -rf logdb/*.zip')
 
 #  tmvS0 = datetime.strptime(s0, '%Y-%m-%d  %H:%M:%S.%f')
 #  tmvS1 = datetime.strptime(s1, '%Y-%m-%d  %H:%M:%S.%f')
@@ -41,7 +41,10 @@ if __name__ == '__main__':
   for o, a in optlist:
     if o == '-u':
       user = a
-      crcsuser = str(hex(int(user))).strip('0x')
+      try:
+        crcsuser = str(hex(int(user))).strip('0x')
+      except ValueError:
+        crcsuser = user.lower() #str(hex(int(user))).strip('0x')
     elif o == '-p':
       sec = a
     elif o == '-a':
@@ -50,7 +53,7 @@ if __name__ == '__main__':
   s = ''
   for arg in sys.argv[1:]:
      s = s + ' ' + arg
-  #print s
+  print '\033[94m./cmdproxy.py' + s + '\033[0m'
 
   for cmd in ssh_cmd:
     realcmd = cmd + " '" + rcmd + s +"'"
@@ -97,6 +100,7 @@ if __name__ == '__main__':
     print s0, s1, cmd
 
   #print 'sgw:', 'process pcap file'
+  print cmd
   print s0, s1#, cmd
   os.system(cmd)
 
@@ -121,6 +125,7 @@ if __name__ == '__main__':
     print s2, s3, cmd
 
   #print 'sgw:', 'process pcap file'
+  print cmd
   print s2, s3#, cmd
   os.system(cmd)
 

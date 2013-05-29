@@ -11,15 +11,103 @@ from datetime import datetime
 from netinfo import netinfo
 from s2info import s2info
 import csv
+import copy
 
 usage = """
           -h display help message
         """
 
+def do_merge(infofd, sorted_tminfo, s0, s1):
+  merged_tminfo = []
+  idx = 0
+  cnt = len(sorted_tminfo) - 1
+#  sorted_tminfo[0][0] = 0.0
+#  sorted_tminfo[cnt][1] = 0.0
+
+  if len(sorted_tminfo) <= 0:
+    merged_tminfo.append([s0, s1])
+    return merged_tminfo
+
+  for tm in sorted_tminfo:
+    if idx >= cnt:
+      break
+    ntm = sorted_tminfo[idx+1]
+    r = ntm[0] - tm[1]
+    if r < 60:
+      tm[1] = 0.0
+      ntm[0] = 0.0
+      #if r < 0:
+      #  print 'pcapinfo merge may error'
+    idx = idx + 1
+    
+  #print sorted_tminfo
+  stm = 0.0
+  etm = 0.0
+  is_append = False
+  if s0 < sorted_tminfo[0][0]:
+    #print 'append', s0, sorted_tminfo[0][0]
+    merged_tminfo.append([s0, sorted_tminfo[0][0]])
+
+  for tm in sorted_tminfo:
+    #print tm
+    if tm[1] > 0.0:
+      stm = tm[1]
+      is_append = True
+    elif is_append and tm[0] > 0.0:
+      etm = tm[0]
+      #print 'append', stm, etm
+      merged_tminfo.append([stm, etm])
+      is_append = False
+
+  if sorted_tminfo[cnt][1] < s1:
+    #print 'append', sorted_tminfo[cnt][1], s1
+    merged_tminfo.append([sorted_tminfo[cnt][1], s1])
+
+#  print 'merged'
+#  print merged_tminfo
+  return merged_tminfo
+
+def chk_date_range2(tm, tmarray):
+  low = 0
+  is_s2 = False
+  ishit = False
+  high = len(tmarray) - 1
+  mid = -1
+  while low <= high:
+    try:
+      mid = (low + high)//2
+      midtm = tmarray[mid]
+      if midtm[7] == 'S2':
+        if midtm[1] < tm:
+          low = mid + 1
+        elif midtm[0] > tm:
+          high = mid - 1
+        else:
+          ishit = True
+          break
+      else:
+        if midtm[1] <= tm:
+          low = mid + 1
+        elif midtm[0] >= tm:
+          high = mid - 1
+        else:
+          ishit = True
+          break
+    except IndexError:
+      print mid
+
+  if ishit and  tmarray[mid][7] == 'S2':
+    is_s2 = True
+  elif ishit and tmarray[mid][7] == '--':
+    is_s2 = False
+
+  return ishit,mid,is_s2
+
 def chk_date_range(tm, tmarray):
   low = 0
   ishit = False
   high = len(tmarray) - 1
+  mid = -1
   while low <= high:
     try:
       mid = (low + high)//2
@@ -49,13 +137,256 @@ class pcapDB(object):
     cmd = 'CREATE TABLE pcaplog (sdate real, edate real, info text)'
     c.execute(cmd)
     self.pcapconn.commit()
+    self.soinfo = []
+    self.pcapinfo = []
+    self.pcaplostinfo = []
+    self.pcaplostsec = 0.0
 
   def setgap(self, sec):
     self.gap = sec
 
+#  def writepcapinfo(self, sflag, eflag, tl):
+#    plistm = 0.0
+#    plietm = 0.0
+#    for pli in self.pcaplostinfo:
+#      if stm > pli[0] and stm < pli[1]:
+#        sflag = True
+#      if etm > pli[0] and etm < pli[1]:
+#        eflag = True
+#
+#    if sflag and eflag:
+#      sd = datetime.utcfromtimestamp(tl[0])
+#      ed = datetime.utcfromtimestamp(tl[1])
+#      tl[2] = '%.3f' %(tl[1] - tl[0])
+#      tl[0] = sd.strftime('%Y/%m/%d %H:%M:%S.%f')
+#      tl[1] = ed.strftime('%Y/%m/%d %H:%M:%S.%f')
+#      idx = idx + 1
+#      wfd.writerow(tl)
+#
+#  def chk_pcaplost(self, stm, etm):
+#    sflag = False
+#    eflag = False
+#
+#    for pli in self.pcaplostinfo:
+#      if stm > pli[0] and stm < pli[1]:
+#        sflag = True
+#      if etm > pli[0] and etm < pli[1]:
+#        eflag = True
+#
+#      if sflag or eflag:
+#        break
+#    return sflag, eflag
+
+  def build_final_soinfo(self, s0, s1):
+    newsoinfo = []
+    tmps = 0.0
+    tmpe = 0.0
+
+    for pli in self.pcaplostinfo:
+      stm = pli[0]
+      etm = pli[1]
+      if stm <= s0:
+        tmps = s0
+      elif stm < s1:
+        tmps = stm
+      else:
+        tmps = 0.0
+
+      if etm >= s1:
+        tmpe = s1
+      elif etm > s0:
+        tmpe = etm
+      else:
+        tmpe = 0.0
+
+      if tmps > 0.0 and tmpe > 0.0:
+        self.pcaplostsec = self.pcaplostsec + (tmpe - tmps)
+        if tmpe <= tmps:
+          print 'PCAP lost statistic ERROR', stm, etm, s0, s1
+
+      for so in self.soinfo:
+        if so[0] > stm and so[1] < etm:
+          so[7] = '--'
+          #print so
+
+        if stm > so[0] and stm < so[1]:
+          so[2] = stm
+        if etm > so[0] and etm < so[1]:
+          so[3] = etm
+          break
+
+    for so in self.soinfo:
+      #print 'old.soinfo', so
+      if so[2] == 0.0 and so[3] == 0.0:
+        newsoinfo.append(so)
+      elif so[2] > 0.0 and so[3] > 0.0:
+        #print '2 and 3 old.soinfo', so
+        tmpso = copy.copy(so)
+        tmpso[1] = so[2]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        newsoinfo.append(tmpso)
+        tmpso = copy.copy(so)
+        tmpso[0] = so[2]
+        tmpso[1] = so[3]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        tmpso[7] = '--'
+        #print tmpso
+        newsoinfo.append(tmpso)
+        tmpso = copy.copy(so)
+        tmpso[0] = so[3]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        newsoinfo.append(tmpso)
+      elif so[2] == 0.0:
+        #print '2 old.soinfo', so
+        tmpso = copy.copy(so)
+        tmpso[1] = so[3]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        tmpso[7] = '--'
+        #print tmpso
+        newsoinfo.append(tmpso)
+        #tmpso = so
+        tmpso = copy.copy(so)
+        tmpso[0] = so[3]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        newsoinfo.append(tmpso)
+      elif so[3] == 0.0:
+        #print '3 old.soinfo', so
+        #tmpso = so
+        tmpso = copy.copy(so)
+        tmpso[1] = so[2]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        newsoinfo.append(tmpso)
+        #tmpso = so
+        tmpso = copy.copy(so)
+        tmpso[0] = so[2]
+        tmpso[2] = 0.0
+        tmpso[3] = 0.0
+        tmpso[7] = '--'
+        #print tmpso
+        newsoinfo.append(tmpso)
+
+    return newsoinfo
+
+  def build_soinfo2(self, dS0, dS1):
+    news2info = []
+    idx = 0
+    cnt = len(s2info) - 1
+    for s2 in s2info:
+      news2info.append(s2)
+      if idx < cnt:
+        news2info.append([s2[1], s2info[idx+1][0], 0, 0, 0, 0, 0, 'Sx', 0])
+      idx = idx + 1
+
+    isS0Flag = False
+    isS1Flag = False
+    cnt = len(news2info) - 1
+    for s2 in news2info:
+      if dS0 > s2[0] and dS0 < s2[1]:
+        s2[2] = dS0
+        isS0Flag = True
+      if dS1 > s2[0] and dS1 < s2[1]:
+        s2[3] = dS1
+        isS1Flag = True
+
+    #print isS0Flag, isS1Flag, news2info
+    start_append = False
+
+    if isS0Flag == False:
+      if dS0 < news2info[0][0] and dS1 > news2info[0][0]:
+        self.soinfo.append([dS0, news2info[0][0], 0, 0, 0, 0, 0, 'Sx', 0])
+        start_append = True
+      elif dS0 > news2info[cnt][1]:
+        self.soinfo.append([dS0, dS1, 0, 0, 0, 0, 0, 'Sx', 0])
+
+    for s2 in news2info:
+      if s2[2] > 0.0 and s2[3] > 0.0:
+        self.soinfo.append([s2[2], s2[3], 0, 0, 0, 0, 0, 'S2', 0])
+        break
+      elif s2[2] > 0.0:
+        self.soinfo.append([s2[2], s2[1], 0, 0, 0, 0, 0, s2[7], 0])
+        start_append = True
+      elif s2[3] > 0.0:
+        self.soinfo.append([s2[0], s2[3], 0, 0, 0, 0, 0, s2[7], 0])
+        break
+      else:
+        if start_append:
+          self.soinfo.append(s2)
+
+    if isS1Flag == False:
+      if dS1 < news2info[0][0]:
+        self.soinfo.append([dS0, dS1, 0, 0, 0, 0, 0, 'Sx', 0])
+      elif dS0 < news2info[cnt][1]:
+        self.soinfo.append([news2info[cnt][1], dS1, 0, 0, 0, 0, 0, 'Sx', 0])
+    #print self.soinfo
+
+  def build_soinfo(self, dS0, dS1):
+    idx = 0
+    cnt = len(s2info) - 1
+    is_s2 = False
+    news2info = []
+    ishit = False
+
+    for s2 in s2info:
+      #print s2
+      if s2[1] < dS0:
+        continue
+      elif s2[0] > dS1:
+        break
+      else:
+        news2info.append(s2)
+
+    #print news2info
+    cnt = len(news2info) - 1
+    idx = 0
+    if cnt < 0:
+      self.soinfo.append([dS0, dS1, 0, 0, 0, 0, 0, 'Sx', 0])
+      return
+
+    if dS0 < news2info[0][0]:
+      self.soinfo.append([dS0, news2info[0][0], 0, 0, 0, 0, 0, 'Sx', 0])
+    else:
+      self.soinfo.append([dS0, news2info[0][1], 0, 0, 0, 0, 0, 'S2', 0])
+      idx = 1
+      is_s2 = True
+
+    while idx < cnt:
+      if is_s2:
+        self.soinfo.append([news2info[idx-1][1], news2info[idx][0], 0, 0, 0, 0, 0, 'Sx', 0])
+        self.soinfo.append([news2info[idx][0], news2info[idx][1], 0, 0, 0, 0, 0, 'S2', 0])
+      else:
+        self.soinfo.append([news2info[idx][0], news2info[idx][1], 0, 0, 0, 0, 0, 'S2', 0])
+        self.soinfo.append([news2info[idx][1], news2info[idx+1][0], 0, 0, 0, 0, 0, 'Sx', 0])
+
+      idx = idx +1
+
+    if dS1 > news2info[cnt][1]:
+      if is_s2:#dS1 > news2info[cnt][1]:
+        self.soinfo.append([news2info[cnt-1][1], news2info[cnt][0], 0, 0, 0, 0, 0, 'Sx', 0])
+        self.soinfo.append([news2info[cnt][0], news2info[cnt][1], 0, 0, 0, 0, 0, 'S2', 0])
+        self.soinfo.append([news2info[cnt][1], dS1, 0, 0, 0, 0, 0, 'Sx', 0])
+      else:
+        self.soinfo.append([news2info[cnt][0], news2info[cnt][1], 0, 0, 0, 0, 0, 'S2', 0])
+        self.soinfo.append([news2info[cnt][1], dS1, 0, 0, 0, 0, 0, 'Sx', 0])
+    else:
+      self.soinfo.append([news2info[cnt][0], dS1, 0, 0, 0, 0, 0, 'S2', 0])
+    #print len(s2info), len(self.soinfo)
+    #print s2info
+    #print '***'
+    #print self.soinfo
+    #sys.exit(1)
+
   def loadpcap(self, pcapfile, field, exp):
     self.tm = float(0.0)
-    pcapinfo = pyshark.read(pcapfile, field, exp)
+    try:
+      pcapinfo = pyshark.read(pcapfile, field, exp)
+    except pyshark.PySharkError:
+      return
     stm = 0.0
     cmd = 'INSERT INTO pcaplog VALUES ('
     for pkt in pcapinfo:
@@ -71,6 +402,7 @@ class pcapDB(object):
 
       self.tm = tm
     cmd = cmd + str(stm) + ','+str(self.tm)+',"'+pcapfile+'")'
+    self.pcapinfo.append([stm, self.tm, pcapfile])
     try:
       c = self.pcapconn.cursor()
       c.execute(cmd)
@@ -85,11 +417,42 @@ class pcapDB(object):
     cnt = 0
     appcnt = 0
     infofd = open('out/'+self.user+'-detail.txt', 'w')
+
+    sorted_tminfo =sorted(self.pcapinfo, key=lambda tm: tm[0])
+
+    for pi in sorted_tminfo:
+      d0 = datetime.utcfromtimestamp(pi[0])
+      d0 = d0.strftime('%Y/%m/%d %H:%M:%S.%f')
+      d1 = datetime.utcfromtimestamp(pi[1])
+      d1 = d1.strftime('%Y/%m/%d %H:%M:%S.%f')
+      pidetail = d0 + ' -- ' + d1 + ' * ' +str(pi) + '\n'
+      infofd.write(pidetail)
+
+    self.pcaplostinfo = do_merge(infofd, sorted_tminfo, s0, s1)
+#    for pli in self.pcaplostinfo:
+#      print pli
+#      infofd.write(str(pli))
+#    infofd.write()
+#    print 'newsoinfo'
+    self.soinfo = self.build_final_soinfo(s0, s1)
+    print 'PCAP lost statistic: %.2f%%' %(100*(self.pcaplostsec/(s1-s0)))
+    #for so in self.soinfo:
+    #  print so
+    #sys.exit(1)
     c = self.conn.cursor()
     for o in self.radio_up:
       tm = o[0]['frame.time_epoch']
       is_wifi = False
       is_s2 = False
+      is_hit = False
+      try:
+        proto = o[0]['ip.proto']
+      except KeyError:
+        proto = 0
+
+      if proto != 6:
+        continue
+
       if s0 != 0 and s1 != 0 and (tm < s0 or tm > s1):
         continue
       is_wifi,idx = chk_date_range(tm, netinfo)
@@ -100,7 +463,15 @@ class pcapDB(object):
       if is_wifi:
         continue
 
-      is_s2,idx = chk_date_range(tm, s2info)
+      is_hit,idx,is_s2 = chk_date_range2(tm, self.soinfo)
+      if is_hit == False:
+#        print 'TCPHIT.ERROR', o[0]
+        d = datetime.utcfromtimestamp(tm)
+        print d.strftime('%Y/%m/%d %H:%M:%S.%f'), 'TCPHIT.ERROR', o[0]
+      #  is_so, soidx = chk_date_range2(tm, self.soinfo)
+      #  #print is_so, soidx, tm
+      #  if is_so == False:
+      #    print 'ERROR', o[0]
       #for s2obj in s2info:
       #  if tm >= s2obj[0] and tm <= s2obj[1]:
       #    is_s2 = True
@@ -108,26 +479,32 @@ class pcapDB(object):
 
       d = datetime.utcfromtimestamp(tm)
       #o[0]['frame.time_epoch'] = o[0]['frame.time_epoch'].strftime('%Y/%m/%d %H:%M:%S.%f')
-      try:
-        proto = o[0]['ip.proto']
-      except KeyError:
-        proto = 0
+      #try:
+      #  proto = o[0]['ip.proto']
+      #except KeyError:
+      #  proto = 0
 
       if o[1] != self.logfile:
         infofd.write(o[1] + '\n')
         self.logfile = o[1]
       if proto == 6:
-        if is_s2:
-          infofd.write(str(o[0]) + ' TS2'+str(idx) + '\n')
-        else:
-          infofd.write(str(o[0]) + '\n')
+        if is_hit:
+          idxinfo = ' ' + self.soinfo[idx][7] +'T'+ str(idx) + '\n'
+          infofd.write(str(o[0]) + idxinfo)
+        #else:
+        #  infofd.write(str(o[0]) + '\n')
         dstport = o[0]['tcp.dstport']
         srcport = o[0]['tcp.srcport']
         o[0]['frame.time_epoch'] = d.strftime('%Y/%m/%d %H:%M:%S.%f')
         cnt = cnt + 1
         if is_s2:
           s2cnt = s2cnt + 1
-          s2info[idx][3] = s2info[idx][3] + 1
+
+        self.soinfo[idx][3] = self.soinfo[idx][3] + 1
+        #else:
+        #  if is_so:
+        #    #print soidx, len(self.soinfo), self.soinfo[soidx]
+        #    self.soinfo[soidx][3] = self.soinfo[soidx][3] + 1
         #tm = get_crcs_sec(d)
         rows = c.execute("select * from crcslog where rport = '%d' and (date > %f and date <%f)" % (srcport, tm-60, tm + 60))
         #rows = c.execute("select * from crcslog where rport = '%d' " % (srcport))
@@ -140,7 +517,10 @@ class pcapDB(object):
           appcnt = appcnt + 1
           if is_s2:
             apps2cnt = apps2cnt + 1
-            s2info[idx][4] = s2info[idx][4] + 1
+          self.soinfo[idx][4] = self.soinfo[idx][4] + 1
+          #else:
+          #  if is_so:
+          #    self.soinfo[soidx][4] = self.soinfo[soidx][4] + 1
           #print o[0], rn
 
     detail = 'TCP radio up:'+ str(s2cnt) + '/' + str(cnt) + ' App radio up:' +str(apps2cnt) + '/' + str(appcnt)
@@ -155,6 +535,15 @@ class pcapDB(object):
       tm = o[0]['frame.time_epoch']
       is_wifi = False
       is_s2 = False
+      is_hit = False
+      try:
+        proto = o[0]['ip.proto']
+      except KeyError:
+        proto = 0
+
+      if proto != 17:
+        continue
+
       if s0 != 0 and s1 != 0 and (tm < s0 or tm > s1):
         continue
 
@@ -166,16 +555,25 @@ class pcapDB(object):
       if is_wifi:
         continue
 
-      is_s2,idx = chk_date_range(tm, s2info)
+      is_hit,idx,is_s2 = chk_date_range2(tm, self.soinfo)
+      if is_hit == False:
+#        print 'UDPHIT.ERROR', o[0]
+        d = datetime.utcfromtimestamp(tm)
+        print d.strftime('%Y/%m/%d %H:%M:%S.%f'), 'UDPPHIT.ERROR', o[0]
+      #  is_so, soidx = chk_date_range2(tm, self.soinfo)
+      #  if is_so == False:
+      #    print 'ERROR', o[0]
+      #  #else:
+      #  #  print 'OK', o[0]
       #for s2obj in s2info:
       #  if tm >= s2obj[0] and tm <= s2obj[1]:
       #    is_s2 = True
       #    break
 
-      try:
-        proto = o[0]['ip.proto']
-      except KeyError:
-        proto = 0
+      #try:
+      #  proto = o[0]['ip.proto']
+      #except KeyError:
+      #  proto = 0
       #o[0] = datetime.utcfromtimestamp(o[0]).strftime('%Y/%m/%d %H:%M:%S.%f')
       #o[3] = datetime.utcfromtimestamp(o[3]).strftime('%Y/%m/%d %H:%M:%S.%f')
       if o[1] != self.logfile:
@@ -183,19 +581,26 @@ class pcapDB(object):
         self.logfile = o[1]
 
       if proto == 17:
-        if is_s2:
-          infofd.write(str(o[0]) + ' US2'+str(idx) + '\n')
-        else:
-          infofd.write(str(o[0]) + '\n')
+        if is_hit:
+          idxinfo = ' ' + self.soinfo[idx][7] +'U'+ str(idx) + '\n'
+          infofd.write(str(o[0]) + idxinfo)
+
         cnt = cnt + 1
         if is_s2:
           s2cnt = s2cnt + 1
-          s2info[idx][5] = s2info[idx][5] + 1
+        self.soinfo[idx][5] = self.soinfo[idx][5] + 1
+        #else:
+        #  if is_so:
+        #    self.soinfo[soidx][5] = self.soinfo[soidx][5] + 1
+
         if o[0]['udp.dstport'] == 53:
           dnscnt = dnscnt + 1
           if is_s2:
             dnss2cnt = dnss2cnt + 1
-            s2info[idx][6] = s2info[idx][6] + 1
+          self.soinfo[idx][6] = self.soinfo[idx][6] + 1
+          #else:
+          #  if is_so:
+          #    self.soinfo[soidx][6] = self.soinfo[soidx][6] + 1
     detail = 'UDP radio up: ' +str(s2cnt)+'/'+ str(cnt) + ' DNS radio up: '+str(dnss2cnt)+'/' + str(dnscnt)
     print detail
     infofd.write(detail + '\n')
@@ -204,19 +609,22 @@ class pcapDB(object):
   def out_s2info_csv(self):
     csvfd = open('out/'+self.user+'-s2info.csv', 'wb')
     wfd = csv.writer(csvfd)
-    wfd.writerow(['SDATE', 'EDATE', 'TIME', 'TCP radio up', 'APP radio up', 'UDP radio up', 'DNS radio up', 'IDX'])
+    wfd.writerow(['SDATE', 'EDATE', 'TIME', 'TCP radio up', 'APP radio up', 'UDP radio up', 'DNS radio up', 'Flag', 'IDX'])
     idx = 0
-    for si in s2info:
-      tl = list(si)
-      tl.append(idx)
+    for so in self.soinfo:
+      tl = so
+      tl[8] = idx
+      #sflag, eflag = chk_pcaplost(tl[0], tl[1])
+      #if sflag == False and eflag == False:
       sd = datetime.utcfromtimestamp(tl[0])
       ed = datetime.utcfromtimestamp(tl[1])
-      tl[2] = '%.3f sec' %(tl[1] - tl[0])
+      tl[2] = '%.3f' %(tl[1] - tl[0])
       tl[0] = sd.strftime('%Y/%m/%d %H:%M:%S.%f')
       tl[1] = ed.strftime('%Y/%m/%d %H:%M:%S.%f')
-      wfd.writerow(tl)
       idx = idx + 1
-
+      wfd.writerow(tl)
+      #else:
+      #  writepcapinfo(wfd, sflag, eflag, tl)
     csvfd.close()
 
       
@@ -272,7 +680,9 @@ if __name__ == '__main__':
 
   os.system('rm -f /root/logdb/pcap-'+user+'.sqlite')
   obj = pcapDB(user)
+  obj.build_soinfo2(dS0, dS1)
   obj.setgap(sec)
+  #logs = glob.glob('logs/*.pcap')
   logs = glob.glob('logs/*.pcap')
   #print logs, pf
   for log in logs:
