@@ -79,7 +79,7 @@ int list_task_by_cgroup(char *name, char *controller) {
 
   err = cgroup_get_procs(name, controller, &pids, &size);
   if (err) {
-    DEBUG("list_task_by_cgroup failed with %s\n",  cgroup_strerror(err));
+    DEBUG("list_task_by_cgroup failed with %s, name=%s, controller=%s\n",  cgroup_strerror(err), name, controller);
     return -1;
   }
 
@@ -137,17 +137,18 @@ int main(int argc, char *argv[]) {
     if(strncmp(GURI_LSCGROUPS, uri, URIMAX) == 0) {
       list_all_cgroups();
     } else if(strncmp(GURI_LSTASKS, uri, strlen(GURI_LSTASKS)) == 0) {
+      char uribuf[FILENAME_MAX] = {0};
       char *controller = NULL, *name = NULL, *ptr = NULL;
-      controller = uri+strlen(GURI_LSTASKS);
+
+      strncpy(uribuf, uri, FILENAME_MAX);
+      controller = uribuf + strlen(GURI_LSTASKS);
       name = strchr(controller, '/');
       if(! name) {
         name = "";
       } else {
         *name='\0', name++;
-        ptr = strchr(name, '/');
-        if(ptr) *ptr='\0';
       }
-      list_task_by_cgroup(controller, name);
+      list_task_by_cgroup(name, controller);
     } else if(strncmp("/cgroups/taskmgr", uri, URIMAX) == 0) {
       char postdata[256] = {'\0'}, *name = NULL, *pid;
       const char* controllers[] ={"cpuset", "memory", "cpu", NULL};
