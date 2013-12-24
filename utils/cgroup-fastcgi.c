@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
     if(! uri) continue;
 
     OUT("<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n");
-    OUT("<cgroups>");
+    OUT("<root>");
     if(strncmp(GURI_LSCGROUPS, uri, URIMAX) == 0) {
       list_all_cgroups();
     } else if(strncmp(GURI_LSTASKS, uri, strlen(GURI_LSTASKS)) == 0) {
@@ -138,7 +138,7 @@ int main(int argc, char *argv[]) {
       attach_task_to_cgroup(name, controllers, atol(pid));
     }
     //dumpEnv(reqEnv);
-    OUT("</cgroups>");
+    OUT("</root>");
   }
 
   return 0;
