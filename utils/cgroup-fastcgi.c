@@ -127,10 +127,9 @@ int main(int argc, char *argv[]) {
   }
 
   while (FCGI_Accept() >= 0) {
-//while(1) {
     OUT("Content-type: text/xml\r\n");
     OUT("\r\n");
-    char *uri = GURI_LSCGROUPS;//getenv("REQUEST_URI");
+    char *uri = getenv("REQUEST_URI");
     if(! uri) continue;
 
     OUT("<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n");
