@@ -10,6 +10,7 @@
 #include <libcgroup.h>
 extern char **environ;
 #include <fcgi_stdio.h>
+//char **environ = NULL;
 
 #define OUT printf
 #define DEBUG(...) fprintf(stderr, __VA_ARGS__)
@@ -20,26 +21,52 @@ extern char **environ;
 
 #define URIMAX 256
 
+void visit_cgroups_node(struct cgroup_file_info *info, char *root) {
+  if (info->type == CGROUP_FILE_TYPE_DIR) {
+    OUT("<cgroup><name>%s</name><fullpath>%s</fullpath></cgroup>", info->path, info->full_path+strlen(root)-1);
+  }
+}
+
+void list_groups_info_by_controller(char *controller) {
+  int err = 0, lvl;
+  void *handle = NULL;
+  struct cgroup_file_info info;
+  char root[FILENAME_MAX] = {0};
+
+  err = cgroup_walk_tree_begin(controller, "/", 0, &handle, &info, &lvl);
+  if(err != 0) {
+    return;
+  }
+  cgroup_walk_tree_set_flags(&handle, CGROUP_WALK_TYPE_POST_DIR);
+  strcpy(root, info.full_path);
+  visit_cgroups_node(&info, root);
+  while((err = cgroup_walk_tree_next(0, &handle, &info, lvl)) != ECGEOF) {
+    visit_cgroups_node(&info, root);
+  }
+  cgroup_walk_tree_end(&handle);
+}
+
 int list_all_cgroups () {
   int err = 0;
   void *handle = NULL;
   struct controller_data info;
 
   err = cgroup_get_all_controller_begin(&handle, &info);
-  OUT("<cgroups>");
+  OUT("<controllers>");
   while(err != ECGEOF) {
-    OUT("<cgroup>");
+    OUT("<controller>");
     OUT("<name>%s</name>", info.name);
     OUT("<ngroups>%d</ngroups>", info.num_cgroups);
+    list_groups_info_by_controller(info.name);
     OUT("<enable>%d</enable>", info.enabled);
-    OUT("</cgroup>");
+    OUT("</controller>");
     err = cgroup_get_all_controller_next(&handle, &info);
     if(err && err != ECGEOF) {
       DEBUG("list_all_cgroups failed with %s\n",  cgroup_strerror(err));
       return -1;
     }
   }
-  OUT("</cgroups>");
+  OUT("</controllers>");
 
   err = cgroup_get_all_controller_end(&handle);
 
@@ -100,9 +127,10 @@ int main(int argc, char *argv[]) {
   }
 
   while (FCGI_Accept() >= 0) {
+//while(1) {
     OUT("Content-type: text/xml\r\n");
     OUT("\r\n");
-    char *uri = getenv("REQUEST_URI");
+    char *uri = GURI_LSCGROUPS;//getenv("REQUEST_URI");
     if(! uri) continue;
 
     OUT("<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n");
