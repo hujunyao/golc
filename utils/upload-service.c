@@ -1,34 +1,4 @@
-/*
-     This file is part of libmicrohttpd
-     (C) 2013 Christian Grothoff (and other contributing authors)
-
-     This library is free software; you can redistribute it and/or
-     modify it under the terms of the GNU Lesser General Public
-     License as published by the Free Software Foundation; either
-     version 2.1 of the License, or (at your option) any later version.
-
-     This library is distributed in the hope that it will be useful,
-     but WITHOUT ANY WARRANTY; without even the implied warranty of
-     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-     Lesser General Public License for more details.
-
-     You should have received a copy of the GNU Lesser General Public
-     License along with this library; if not, write to the Free Software
-     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
-*/
-
-/**
- * @file demo.c
- * @brief complex demonstration site: create directory index, offer
- *        upload via form and HTTP POST, download with mime type detection
- *        and error reporting (403, etc.) --- and all of this with
- *        high-performance settings (large buffers, thread pool).
- *        If you want to benchmark MHD, this code should be used to
- *        run tests against.  Note that the number of threads may need
- *        to be adjusted depending on the number of available cores.
- * @author Christian Grothoff
- */
-//#include "platform.h"
+/**gcc -o upload.service upload-service.c `pkg-config libevent libmicrohttpd --cflags --libs` -lmagic*/
 #include <microhttpd.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -44,19 +14,15 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <event.h>
 
-#if defined(CPU_COUNT) && (CPU_COUNT+0) < 2
-#undef CPU_COUNT
-#endif
-#if !defined(CPU_COUNT)
-#define CPU_COUNT 2
-#endif
+#define DD(...) fprintf(stderr, ":[D] "__VA_ARGS__)
 
 /**
  * Number of threads to run in the thread pool.  Should (roughly) match
  * the number of cores on your system.
  */
-#define NUMBER_OF_THREADS CPU_COUNT
+#define NUMBER_OF_THREADS 2
 
 /**
  * How many bytes of a file do we give to libmagic to determine the mime type?
@@ -181,8 +147,7 @@ update_cached_response (struct MHD_Response *response)
 /**
  * Context keeping the data for the response we're building.
  */
-struct ResponseDataContext
-{
+struct ResponseDataContext {
   /**
    * Response data string.
    */
@@ -204,8 +169,7 @@ struct ResponseDataContext
 /**
  * Context we keep for an upload.
  */
-struct UploadContext
-{
+struct UploadContext {
   /**
    * Handle where we write the uploaded file to.
    */
@@ -245,11 +209,7 @@ struct UploadContext
  * @param size number of bytes in 'data'
  * @return MHD_NO on allocation failure, MHD_YES on success
  */
-static int
-do_append (char **ret,
-	   const char *data,
-	   size_t size)
-{
+static int do_append (char **ret, const char *data, size_t size) {
   char *buf;
   size_t old_len;
 
@@ -308,29 +268,20 @@ process_upload_data (void *cls,
     return do_append (&uc->from_jid, data, size);
   if (0 == strcmp(key, "to_jid"))
     return do_append (&uc->to_jid, data, size);
-  if (0 != strcmp (key, "upload"))
-    {
-      fprintf (stderr,
-	       "Ignoring unexpected form value `%s'\n",
-	       key);
+  if (0 != strcmp (key, "upload")) {
+      DD("Ignoring unexpected form value `%s'\n", key);
       return MHD_YES; /* ignore */
     }
-  if (NULL == filename)
-    {
-      fprintf (stderr, "No filename, aborting upload\n");
+  if (NULL == filename) {
+      DD("No filename, aborting upload\n");
       return MHD_NO; /* no filename, error */
     }
-  if ( (NULL == uc->to_jid) ||
-       (NULL == uc->from_jid) )
-    {
-      fprintf (stderr,
-	       "Missing form data for upload `%s'\n",
-	       filename);
+  if ( (NULL == uc->to_jid) || (NULL == uc->from_jid) ) {
+      DD("Missing form data for upload `%s'\n", filename);
       uc->response = request_refused_response;
       return MHD_NO;
     }
-  if (-1 == uc->fd)
-    {
+  if (-1 == uc->fd) {
       char fn[PATH_MAX];
 
       if ( (NULL != strstr (filename, "..")) ||
@@ -553,42 +504,13 @@ generate_page (void *cls,
 			     request_refused_response);
 }
 
+static void signal_cb(evutil_socket_t sig, short events, void *data) {
+  struct event_base *base = data;
+  struct timeval delay = { 1, 0 };
 
-/**
- * Function called if we get a SIGPIPE. Does nothing.
- *
- * @param sig will be SIGPIPE (ignored)
- */
-static void
-catcher (int sig)
-{
-  /* do nothing */
+  DD("upload-service will quit in one minute\n");
+  event_base_loopexit(base, &delay);
 }
-
-
-/**
- * setup handlers to ignore SIGPIPE.
- */
-#ifndef MINGW
-static void
-ignore_sigpipe ()
-{
-  struct sigaction oldsig;
-  struct sigaction sig;
-
-  sig.sa_handler = &catcher;
-  sigemptyset (&sig.sa_mask);
-#ifdef SA_INTERRUPT
-  sig.sa_flags = SA_INTERRUPT;  /* SunOS */
-#else
-  sig.sa_flags = SA_RESTART;
-#endif
-  if (0 != sigaction (SIGPIPE, &sig, &oldsig))
-    fprintf (stderr,
-             "Failed to install SIGPIPE handler: %s\n", strerror (errno));
-}
-#endif
-
 
 /**
  * Entry point to demo.  Note: this HTTP server will make all
@@ -599,23 +521,18 @@ ignore_sigpipe ()
  * @param argv first and only argument should be the port number
  * @return 0 on success
  */
-int
-main (int argc, char *const *argv)
-{
+int main (int argc, char *const *argv) {
   struct MHD_Daemon *d;
   unsigned int port;
+  struct event_base *base = NULL;
+  struct event *signal_event = NULL;
 
-  if ( (argc != 2) ||
-       (1 != sscanf (argv[1], "%u", &port)) ||
-       (UINT16_MAX < port) )
-    {
-      fprintf (stderr,
-	       "%s PORT\n", argv[0]);
+  if ( (argc != 2) || (1 != sscanf (argv[1], "%u", &port)) || (UINT16_MAX < port) ) {
+      fprintf (stderr, "%s PORT\n", argv[0]);
       return 1;
     }
-  #ifndef MINGW
-  ignore_sigpipe ();
-  #endif
+
+  base = event_base_new();
   magic = magic_open (MAGIC_MIME_TYPE);
   (void) magic_load (magic, NULL);
 
@@ -636,10 +553,7 @@ main (int argc, char *const *argv)
 #if EPOLL_SUPPORT
 			| MHD_USE_EPOLL_LINUX_ONLY
 #endif
-			,
-                        port,
-                        NULL, NULL,
-			&generate_page, NULL,
+			, port, NULL, NULL, &generate_page, NULL,
 			MHD_OPTION_CONNECTION_MEMORY_LIMIT, (size_t) (256 * 1024),
 #if PRODUCTION
 			MHD_OPTION_PER_IP_CONNECTION_LIMIT, (unsigned int) (64),
@@ -650,8 +564,12 @@ main (int argc, char *const *argv)
 			MHD_OPTION_END);
   if (NULL == d)
     return 1;
-  fprintf (stderr, "HTTP server running. Press ENTER to stop the server\n");
-  (void) getc (stdin);
+
+  signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)base);
+  event_add(signal_event, NULL);
+  event_base_dispatch(base);
+
+  event_base_free(base);
   MHD_stop_daemon (d);
   MHD_destroy_response (file_not_found_response);
   MHD_destroy_response (request_refused_response);
@@ -659,7 +577,6 @@ main (int argc, char *const *argv)
   update_cached_response (NULL);
   (void) pthread_mutex_destroy (&mutex);
   magic_close (magic);
+
   return 0;
 }
-
-/* end of demo.c */
