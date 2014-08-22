@@ -18,41 +18,17 @@
 
 #define DD(...) fprintf(stderr, ":[D] "__VA_ARGS__)
 
-/**
- * Number of threads to run in the thread pool.  Should (roughly) match
- * the number of cores on your system.
- */
-#define NUMBER_OF_THREADS 2
-
-/**
- * How many bytes of a file do we give to libmagic to determine the mime type?
- * 16k might be a bit excessive, but ought not hurt performance much anyway,
- * and should definitively be on the safe side.
- */
+#define NUMBER_OF_THREADS 6
 #define MAGIC_HEADER_SIZE (16 * 1024)
 
-
-/**
- * Page returned for file-not-found.
- */
 #define FILE_NOT_FOUND_PAGE "<html><head><title>File not found</title></head><body>File not found</body></html>"
 
+#define INTERNAL_ERROR_PAGE "<html><head><title>Internal error</title></head><body>HTTP Server Internal error</body></html>"
 
-/**
- * Page returned for internal errors.
- */
-#define INTERNAL_ERROR_PAGE "<html><head><title>Internal error</title></head><body>Internal error</body></html>"
-
-
-/**
- * Page returned for refused requests.
- */
 #define REQUEST_REFUSED_PAGE "<html><head><title>Request refused</title></head><body>Request refused (file exists?)</body></html>"
 
+#define UPLOAD_SUCCESS_PAGE "<html><head><title>Upload file success</title></head><body>Upload file success</body></html>"
 
-/**
- * Head of index page.
- */
 #define INDEX_PAGE_HEADER "<html>\n<head><title>Welcome</title></head>\n<body>\n"\
    "<h1>Upload</h1>\n"\
    "<form method=\"POST\" enctype=\"multipart/form-data\" action=\"/\">\n"\
@@ -76,9 +52,6 @@
    "<h1>Download</h1>\n"\
    "<ol>\n"
 
-/**
- * Footer of index page.
- */
 #define INDEX_PAGE_FOOTER "</ol>\n</body>\n</html>"
 
 
@@ -102,6 +75,8 @@ static struct MHD_Response *cached_directory_response;
  */
 static struct MHD_Response *request_refused_response;
 
+
+static struct MHD_Response *upload_success_response;
 /**
  * Mutex used when we update the cached directory response object.
  */
@@ -261,7 +236,7 @@ process_upload_data (void *cls,
 		     size_t size)
 {
   struct UploadContext *uc = cls;
-  int i;
+  int i, writen = 0;
 
   //fprintf(stderr, "key = %s, filename = %s\n", key, filename);
   if (0 == strcmp(key, "from_jid"))
@@ -272,80 +247,66 @@ process_upload_data (void *cls,
       DD("Ignoring unexpected form value `%s'\n", key);
       return MHD_YES; /* ignore */
     }
+
   if (NULL == filename) {
-      DD("No filename, aborting upload\n");
-      return MHD_NO; /* no filename, error */
-    }
+    DD("No filename, aborting upload\n");
+    return MHD_NO; /* no filename, error */
+  }
+
   if ( (NULL == uc->to_jid) || (NULL == uc->from_jid) ) {
-      DD("Missing form data for upload `%s'\n", filename);
+    DD("Missing form data for upload `%s'\n", filename);
+    uc->response = request_refused_response;
+    return MHD_NO;
+  }
+
+  if (-1 == uc->fd) {
+    char fn[PATH_MAX] = {0};
+
+    if ( (NULL != strstr (filename, "..")) || (NULL != strchr (filename, '/')) || (NULL != strchr (filename, '\\')) ) {
       uc->response = request_refused_response;
       return MHD_NO;
     }
-  if (-1 == uc->fd) {
-      char fn[PATH_MAX];
 
-      if ( (NULL != strstr (filename, "..")) ||
-	   (NULL != strchr (filename, '/')) ||
-	   (NULL != strchr (filename, '\\')) )
-	{
-	  uc->response = request_refused_response;
-	  return MHD_NO;
-	}
-      /* create directories -- if they don't exist already */
-      (void) mkdir (uc->to_jid, S_IRWXU);
-      snprintf (fn, sizeof (fn),
-		"%s/%s",
-		uc->to_jid,
-		uc->from_jid);
+    /* create directories -- if they don't exist already */
+    (void) mkdir (uc->to_jid, S_IRWXU);
+    snprintf (fn, sizeof (fn), "%s/%s", uc->to_jid, uc->from_jid);
 
-      (void) mkdir (fn, S_IRWXU);
+    (void) mkdir (fn, S_IRWXU);
 
-      /* open file */
-      snprintf (fn, sizeof (fn),
-		"%s/%s/%s",
-		uc->to_jid,
-		uc->from_jid,
-		filename);
-      for (i=strlen (fn)-1;i>=0;i--)
-	if (! isprint ((int) fn[i]))
-	  fn[i] = '_';
-      uc->fd = open (fn,
-		     O_CREAT | O_EXCL
-#if O_LARGEFILE
-		     | O_LARGEFILE
-#endif
-		     | O_WRONLY,
-		     S_IRUSR | S_IWUSR);
-      if (-1 == uc->fd)
-	{
-	  fprintf (stderr,
-		   "Error opening file `%s' for upload: %s\n",
-		   fn,
-		   strerror (errno));
-	  uc->response = request_refused_response;
-	  return MHD_NO;
-	}
-      uc->filename = strdup (fn);
-    }
-  if ( (0 != size) &&
-       (size != (size_t) write (uc->fd, data, size)) )
-    {
-      /* write failed; likely: disk full */
-      fprintf (stderr,
-	       "Error writing to file `%s': %s\n",
-	       uc->filename,
-	       strerror (errno));
-      uc->response = internal_error_response;
-      close (uc->fd);
-      uc->fd = -1;
-      if (NULL != uc->filename)
-	{
-	  unlink (uc->filename);
-	  free (uc->filename);
-	  uc->filename = NULL;
-	}
+    snprintf (fn, sizeof (fn), "%s/%s/%s", uc->to_jid, uc->from_jid, filename);
+    for (i=strlen (fn)-1;i>=0;i--)
+      if (! isprint ((int) fn[i]))
+        fn[i] = '_';
+
+    uc->fd = open (fn, O_CREAT | O_EXCL | O_WRONLY, S_IRUSR | S_IWUSR);
+    if (-1 == uc->fd) {
+      DD( "Error opening file `%s' for upload: %s\n", fn, strerror (errno));
+      uc->response = request_refused_response;
       return MHD_NO;
     }
+    uc->filename = strdup (fn);
+  }
+
+  if(size > 0)
+    writen = write(uc->fd, data, size);
+
+  //DD("write data to file, data size = %d, writen size = %d\n", size, writen);
+
+  if ( (0 != size) && (size != writen) ) {
+    /* write failed; likely: disk full */
+    DD("Error writing to file `%s': %s\n", uc->filename, strerror (errno));
+    uc->response = internal_error_response;
+    close (uc->fd);
+    uc->fd = -1;
+
+    if (NULL != uc->filename) {
+      unlink (uc->filename);
+      free (uc->filename);
+      uc->filename = NULL;
+    }
+    return MHD_NO;
+  }
+
   return MHD_YES;
 }
 
@@ -400,19 +361,14 @@ response_completed_callback (void *cls,
  * @return MHD_YES on success, MHD_NO on error
  */
 static int
-return_directory_response (struct MHD_Connection *connection)
-{
+return_directory_response (struct MHD_Connection *connection) {
   int ret;
 
   (void) pthread_mutex_lock (&mutex);
   if (NULL == cached_directory_response)
-    ret = MHD_queue_response (connection,
-			      MHD_HTTP_INTERNAL_SERVER_ERROR,
-			      internal_error_response);
+    ret = MHD_queue_response (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, internal_error_response);
   else
-    ret = MHD_queue_response (connection,
-			      MHD_HTTP_OK,
-			      cached_directory_response);
+    ret = MHD_queue_response (connection, MHD_HTTP_OK, cached_directory_response);
   (void) pthread_mutex_unlock (&mutex);
   return ret;
 }
@@ -431,84 +387,70 @@ return_directory_response (struct MHD_Connection *connection)
  * @param ptr our context
  * @return MHD_YES on success, MHD_NO to drop connection
  */
-static int
-generate_page (void *cls,
-	       struct MHD_Connection *connection,
-	       const char *url,
-	       const char *method,
-	       const char *version,
-	       const char *upload_data,
-	       size_t *upload_data_size, void **ptr)
-{
+static int generate_page (void *cls, struct MHD_Connection *connection,
+	       const char *url, const char *method, const char *version,
+	       const char *upload_data, size_t *upload_data_size, void **ptr) {
   struct MHD_Response *response;
-  int ret;
-  int fd;
+  int ret, fd;
   struct stat buf;
 
-  //fprintf(stderr, "url = %s, method = %s\n", url, method);
-
+  //DD("url = %s, method = %s\n", url, method);
   if (0 == strcmp (method, MHD_HTTP_METHOD_POST)) {
-      struct UploadContext *uc = *ptr;
+    struct UploadContext *uc = *ptr;
 
-      if (NULL == uc) {
-	  if (NULL == (uc = malloc (sizeof (struct UploadContext))))
-	    return MHD_NO; /* out of memory, close connection */
-	  memset (uc, 0, sizeof (struct UploadContext));
-          uc->fd = -1;
-	  uc->connection = connection;
-	  uc->pp = MHD_create_post_processor (connection,
-					      64 * 1024 /* buffer size */,
-					      &process_upload_data, uc);
-	  if (NULL == uc->pp)
-	    {
-	      /* out of memory, close connection */
-	      free (uc);
-	      return MHD_NO;
-	    }
-	  *ptr = uc;
-	  return MHD_YES;
-	}
-      if (0 != *upload_data_size) {
-	  if (NULL == uc->response)
-	    (void) MHD_post_process (uc->pp,
-				     upload_data,
-				     *upload_data_size);
-	  *upload_data_size = 0;
-	  return MHD_YES;
-	}
-      /* end of upload, finish it! */
-      MHD_destroy_post_processor (uc->pp);
-      uc->pp = NULL;
-      if (-1 != uc->fd)
-	{
-	  close (uc->fd);
-	  uc->fd = -1;
-	}
-      if (NULL != uc->response)
-	{
-	  return MHD_queue_response (connection,
-				     MHD_HTTP_FORBIDDEN,
-				     uc->response);
-	} else {
-	  return return_directory_response (connection);
-	}
+    if (NULL == uc) {
+      if (NULL == (uc = malloc (sizeof (struct UploadContext))))
+        return MHD_NO; /* out of memory, close connection */
+
+      memset (uc, 0, sizeof (struct UploadContext));
+      uc->fd = -1;
+      uc->connection = connection;
+
+      uc->pp = MHD_create_post_processor (connection, 64 * 1024 /* buffer size */, &process_upload_data, uc);
+      if (NULL == uc->pp) {
+        free (uc);
+        return MHD_NO;
+      }
+
+      *ptr = uc;
+      return MHD_YES;
     }
-  if (0 == strcmp (method, MHD_HTTP_METHOD_GET))
-  {
+
+    if (0 != *upload_data_size) {
+      if (NULL == uc->response)
+        (void) MHD_post_process (uc->pp, upload_data, *upload_data_size);
+        *upload_data_size = 0;
+        return MHD_YES;
+    }
+
+    /* end of upload, finish it! */
+    MHD_destroy_post_processor (uc->pp);
+    uc->pp = NULL;
+    if (-1 != uc->fd) {
+      close (uc->fd);
+      uc->fd = -1;
+    }
+
+    if (NULL != uc->response) {
+      return MHD_queue_response (connection, MHD_HTTP_FORBIDDEN, uc->response);
+    } else {
+      return MHD_queue_response(connection, MHD_HTTP_OK, upload_success_response);
+    }
+  }/**MHD_HTTP_METHOD_POST*/
+
+  if (0 == strcmp (method, MHD_HTTP_METHOD_GET)) {
     return return_directory_response (connection);
   }
 
-  /* unexpected request, refuse */
-  return MHD_queue_response (connection,
-			     MHD_HTTP_FORBIDDEN,
-			     request_refused_response);
+  /* unexpected method request, refuse */
+  return MHD_queue_response (connection, MHD_HTTP_FORBIDDEN, request_refused_response);
 }
 
 static void signal_cb(evutil_socket_t sig, short events, void *data) {
   struct event_base *base = data;
-  struct timeval delay = { 1, 0 };
+  struct timeval delay = { 0, 0 };
 
-  DD("upload-service will quit in one minute\n");
+  DD("upload-service quit now\n");
   event_base_loopexit(base, &delay);
 }
 
@@ -535,29 +477,24 @@ int main (int argc, char *const *argv) {
   base = event_base_new();
   magic = magic_open (MAGIC_MIME_TYPE);
   (void) magic_load (magic, NULL);
-
   (void) pthread_mutex_init (&mutex, NULL);
-  file_not_found_response = MHD_create_response_from_buffer (strlen (FILE_NOT_FOUND_PAGE),
-							     (void *) FILE_NOT_FOUND_PAGE,
-							     MHD_RESPMEM_PERSISTENT);
+
+  file_not_found_response = MHD_create_response_from_buffer (strlen (FILE_NOT_FOUND_PAGE), (void *) FILE_NOT_FOUND_PAGE, MHD_RESPMEM_PERSISTENT);
   mark_as_html (file_not_found_response);
-  request_refused_response = MHD_create_response_from_buffer (strlen (REQUEST_REFUSED_PAGE),
-							     (void *) REQUEST_REFUSED_PAGE,
-							     MHD_RESPMEM_PERSISTENT);
+
+  request_refused_response = MHD_create_response_from_buffer (strlen (REQUEST_REFUSED_PAGE), (void *) REQUEST_REFUSED_PAGE, MHD_RESPMEM_PERSISTENT);
   mark_as_html (request_refused_response);
-  internal_error_response = MHD_create_response_from_buffer (strlen (INTERNAL_ERROR_PAGE),
-							     (void *) INTERNAL_ERROR_PAGE,
-							     MHD_RESPMEM_PERSISTENT);
+
+  upload_success_response = MHD_create_response_from_buffer (strlen(UPLOAD_SUCCESS_PAGE), (void *) UPLOAD_SUCCESS_PAGE, MHD_RESPMEM_PERSISTENT);
+  mark_as_html (upload_success_response);
+
+  internal_error_response = MHD_create_response_from_buffer (strlen (INTERNAL_ERROR_PAGE), (void *) INTERNAL_ERROR_PAGE, MHD_RESPMEM_PERSISTENT);
   mark_as_html (internal_error_response);
-  d = MHD_start_daemon (MHD_USE_SELECT_INTERNALLY | MHD_USE_DEBUG
-#if EPOLL_SUPPORT
-			| MHD_USE_EPOLL_LINUX_ONLY
-#endif
+
+  d = MHD_start_daemon (MHD_USE_SELECT_INTERNALLY | MHD_USE_DEBUG | MHD_USE_EPOLL_LINUX_ONLY
 			, port, NULL, NULL, &generate_page, NULL,
 			MHD_OPTION_CONNECTION_MEMORY_LIMIT, (size_t) (256 * 1024),
-#if PRODUCTION
 			MHD_OPTION_PER_IP_CONNECTION_LIMIT, (unsigned int) (64),
-#endif
 			MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int) (120 /* seconds */),
 			MHD_OPTION_THREAD_POOL_SIZE, (unsigned int) NUMBER_OF_THREADS,
 			MHD_OPTION_NOTIFY_COMPLETED, &response_completed_callback, NULL,
@@ -573,6 +510,7 @@ int main (int argc, char *const *argv) {
   MHD_stop_daemon (d);
   MHD_destroy_response (file_not_found_response);
   MHD_destroy_response (request_refused_response);
+  MHD_destroy_response (upload_success_response);
   MHD_destroy_response (internal_error_response);
   update_cached_response (NULL);
   (void) pthread_mutex_destroy (&mutex);
