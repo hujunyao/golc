@@ -395,6 +395,41 @@ static int generate_page (void *cls, struct MHD_Connection *connection,
   struct stat buf;
 
   //DD("url = %s, method = %s\n", url, method);
+  if (0 == strcmp (method, MHD_HTTP_METHOD_GET)) {
+    if(0 != strcmp(url, "/")) {
+      char file_data[MAGIC_HEADER_SIZE];
+      ssize_t got;
+      const char *mime = NULL;
+
+      if(0 == stat(url+1, &buf) && (NULL == strstr(url+1, "..")) && ('/' != url[1]))
+        fd = open(url+1, O_RDONLY);
+      else
+        fd = -1;
+
+      if(-1 == fd)
+        return MHD_queue_response(connection, MHD_HTTP_NOT_FOUND, file_not_found_response);
+
+      got = read(fd, file_data, sizeof(file_data));
+      if(-1 != got)
+        mime = magic_buffer(magic, file_data, got);
+      else
+        mime = NULL;
+
+       lseek(fd, 0, SEEK_SET);
+       response = MHD_create_response_from_fd(buf.st_size, fd);
+       if(NULL == response) {
+         close(fd);
+         return MHD_NO;
+       }
+       if(NULL != mime)
+         MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, mime);
+
+       ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+       MHD_destroy_response(response);
+       return ret;
+    }
+  } /**MHD_HTTP_METHOD_GET*/
+
   if (0 == strcmp (method, MHD_HTTP_METHOD_POST)) {
     struct UploadContext *uc = *ptr;
 
