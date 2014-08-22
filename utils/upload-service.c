@@ -25,9 +25,10 @@
 
 #define INTERNAL_ERROR_PAGE "<html><head><title>Internal error</title></head><body>HTTP Server Internal error</body></html>"
 
-#define REQUEST_REFUSED_PAGE "<html><head><title>Request refused</title></head><body>Request refused (file exists?)</body></html>"
+//#define REQUEST_REFUSED_PAGE "<html><head><title>Request refused</title></head><body>Request refused (file exists?)</body></html>"
+#define REQUEST_REFUSED_PAGE "{'status': 'REFUSED', 'action': 'upload'}"
 
-#define UPLOAD_SUCCESS_PAGE "<html><head><title>Upload file success</title></head><body>Upload file success</body></html>"
+#define UPLOAD_OK_JSON "{'status': 'OK', 'action': 'upload'}"
 
 #define INDEX_PAGE_HEADER "<html>\n<head><title>Welcome</title></head>\n<body>\n"\
    "<h1>Upload</h1>\n"\
@@ -76,7 +77,7 @@ static struct MHD_Response *cached_directory_response;
 static struct MHD_Response *request_refused_response;
 
 
-static struct MHD_Response *upload_success_response;
+static struct MHD_Response *upload_ok_json_response;
 /**
  * Mutex used when we update the cached directory response object.
  */
@@ -93,12 +94,12 @@ static magic_t magic;
  *
  * @param response response to mark
  */
-static void
-mark_as_html (struct MHD_Response *response)
-{
-  (void) MHD_add_response_header (response,
-				  MHD_HTTP_HEADER_CONTENT_TYPE,
-				  "text/html");
+static void mark_as_html (struct MHD_Response *response) {
+  MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE, "text/html");
+}
+
+static void mark_as_json(struct MHD_Response *response) {
+  MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
 }
 
 
@@ -469,7 +470,7 @@ static int generate_page (void *cls, struct MHD_Connection *connection,
     if (NULL != uc->response) {
       return MHD_queue_response (connection, MHD_HTTP_FORBIDDEN, uc->response);
     } else {
-      return MHD_queue_response(connection, MHD_HTTP_OK, upload_success_response);
+      return MHD_queue_response(connection, MHD_HTTP_OK, upload_ok_json_response);
     }
   }/**MHD_HTTP_METHOD_POST*/
 
@@ -520,8 +521,8 @@ int main (int argc, char *const *argv) {
   request_refused_response = MHD_create_response_from_buffer (strlen (REQUEST_REFUSED_PAGE), (void *) REQUEST_REFUSED_PAGE, MHD_RESPMEM_PERSISTENT);
   mark_as_html (request_refused_response);
 
-  upload_success_response = MHD_create_response_from_buffer (strlen(UPLOAD_SUCCESS_PAGE), (void *) UPLOAD_SUCCESS_PAGE, MHD_RESPMEM_PERSISTENT);
-  mark_as_html (upload_success_response);
+  upload_ok_json_response = MHD_create_response_from_buffer (strlen(UPLOAD_OK_JSON), (void *) UPLOAD_OK_JSON, MHD_RESPMEM_PERSISTENT);
+  mark_as_json(upload_ok_json_response);
 
   internal_error_response = MHD_create_response_from_buffer (strlen (INTERNAL_ERROR_PAGE), (void *) INTERNAL_ERROR_PAGE, MHD_RESPMEM_PERSISTENT);
   mark_as_html (internal_error_response);
@@ -545,7 +546,7 @@ int main (int argc, char *const *argv) {
   MHD_stop_daemon (d);
   MHD_destroy_response (file_not_found_response);
   MHD_destroy_response (request_refused_response);
-  MHD_destroy_response (upload_success_response);
+  MHD_destroy_response (upload_ok_json_response);
   MHD_destroy_response (internal_error_response);
   update_cached_response (NULL);
   (void) pthread_mutex_destroy (&mutex);
