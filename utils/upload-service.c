@@ -1,4 +1,6 @@
-/**gcc -o upload.service upload-service.c `pkg-config libevent libmicrohttpd --cflags --libs` -lmagic*/
+/** compile command: gcc -o upload.service upload-service.c `pkg-config libevent libmicrohttpd --cflags --libs` -lmagic -lepeg
+ ** curl -F "from_jid=wuruxu" -F "to_jid=admin" -F "upload=@IMG_20130212_123414.jpg" http://127.0.0.1:8080/upload
+*/
 #include <microhttpd.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -16,7 +18,11 @@
 #include <stdlib.h>
 #include <event.h>
 
+#include "Epeg.h"
+
 #define DD(...) fprintf(stderr, ":[D] "__VA_ARGS__)
+
+#define THUMBNAIL_MAX_DIMENSION 196
 
 #define NUMBER_OF_THREADS 6
 #define MAGIC_HEADER_SIZE (16 * 1024)
@@ -155,6 +161,7 @@ struct UploadContext {
    * Name of the file on disk (used to remove on errors).
    */
   char *filename;
+  char *thumbnail;
 
   char *from_jid;
   char *to_jid;
@@ -262,6 +269,7 @@ process_upload_data (void *cls,
 
   if (-1 == uc->fd) {
     char fn[PATH_MAX] = {0};
+    char fn_thumb[PATH_MAX] = {0};
 
     if ( (NULL != strstr (filename, "..")) || (NULL != strchr (filename, '/')) || (NULL != strchr (filename, '\\')) ) {
       uc->response = request_refused_response;
@@ -273,6 +281,11 @@ process_upload_data (void *cls,
     snprintf (fn, sizeof (fn), "%s/%s", uc->to_jid, uc->from_jid);
 
     (void) mkdir (fn, S_IRWXU);
+
+    /**create thumbnail directory*/
+    snprintf(fn_thumb, sizeof(fn_thumb), "%s/%s/.thumb", uc->to_jid, uc->from_jid);
+    (void) mkdir(fn_thumb, S_IRWXU);
+    snprintf(fn_thumb, sizeof(fn_thumb), "%s/%s/.thumb/%s", uc->to_jid, uc->from_jid, filename);
 
     snprintf (fn, sizeof (fn), "%s/%s/%s", uc->to_jid, uc->from_jid, filename);
     for (i=strlen (fn)-1;i>=0;i--)
@@ -286,6 +299,7 @@ process_upload_data (void *cls,
       return MHD_NO;
     }
     uc->filename = strdup (fn);
+    uc->thumbnail = strdup (fn_thumb);
   }
 
   if(size > 0)
@@ -351,6 +365,9 @@ response_completed_callback (void *cls,
   }
   if (NULL != uc->filename)
     free (uc->filename);
+  if (NULL != uc->thumbnail)
+    free (uc->thumbnail);
+
   free (uc);
 }
 
@@ -374,6 +391,74 @@ return_directory_response (struct MHD_Connection *connection) {
   return ret;
 }
 
+const char *get_mimetype(char *filename) {
+  char file_data[MAGIC_HEADER_SIZE] = {0};
+  ssize_t got;
+  int fd;
+  const char *mime = NULL;
+  
+  fd = open(filename, O_RDONLY);
+  if(-1 == fd) {
+    return mime;
+  }
+
+  got = read(fd, file_data, sizeof(file_data));
+
+  if (-1 != got) {
+    mime = magic_buffer(magic, file_data, got);
+  }
+
+  if(fd != -1)
+    close(fd);
+
+  return mime;
+}
+
+void generate_video_thumbnail(char *filename, char *thumbnail) {
+  char cmd[PATH_MAX] = {0};
+
+  snprintf(cmd, PATH_MAX, "ffmpegthumbnailer -c jpeg -i %s -s %d -q 10 -o %s", filename, THUMBNAIL_MAX_DIMENSION, thumbnail);
+  DD("generate_video_thumbnail cmd = %s\n", cmd);
+  system(cmd);
+}
+
+void generate_jpeg_thumbnail(char *filename, char *thumbnail) {
+  Epeg_Image *im = NULL;
+  Epeg_Thumbnail_Info info;
+  int w,h, thumb_width, thumb_height;
+
+  im = epeg_file_open(filename);
+  if(! im) {
+    DD("epeg library open failed\n");
+    return;
+  }
+  
+  epeg_size_get(im, &w, &h);
+  if(w > h) {
+    thumb_width = THUMBNAIL_MAX_DIMENSION;
+    thumb_height = THUMBNAIL_MAX_DIMENSION * h/w;
+  } else {
+    thumb_height = THUMBNAIL_MAX_DIMENSION;
+    thumb_width = THUMBNAIL_MAX_DIMENSION * w /h;
+  }
+
+  epeg_decode_size_set(im, thumb_width, thumb_height);
+  epeg_quality_set               (im, 100);
+  epeg_thumbnail_comments_enable (im, 0);
+  epeg_file_output_set           (im, thumbnail);
+  epeg_encode                    (im);
+  epeg_close                     (im);
+}
+
+void generate_thumbnail(char *input, char *output) {
+  const char *mimetype = get_mimetype(input);
+  DD("mime =  %s\n", get_mimetype(input));
+  if(strcmp(mimetype, "image/jpeg") == 0) {
+    generate_jpeg_thumbnail(input, output);
+  } else if(strcmp(mimetype, "video/mp4") == 0) {
+    generate_video_thumbnail(input, output);
+  }
+}
 
 /**
  * Main callback from MHD, used to generate the page.
@@ -462,10 +547,14 @@ static int generate_page (void *cls, struct MHD_Connection *connection,
     /* end of upload, finish it! */
     MHD_destroy_post_processor (uc->pp);
     uc->pp = NULL;
+
     if (-1 != uc->fd) {
       close (uc->fd);
       uc->fd = -1;
     }
+
+    /**generate jpeg thumbnail use epeg library*/
+    generate_thumbnail(uc->filename, uc->thumbnail);
 
     if (NULL != uc->response) {
       return MHD_queue_response (connection, MHD_HTTP_FORBIDDEN, uc->response);
