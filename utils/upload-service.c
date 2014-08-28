@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <event.h>
+#include <dirent.h>
 
 #include "Epeg.h"
 
@@ -460,6 +461,61 @@ void generate_thumbnail(char *input, char *output) {
   }
 }
 
+int list_media_files(char *fn) {
+  DIR *dp = NULL;
+  struct dirent *dent = NULL;
+  int cnt = 0;
+
+  dp = opendir(fn);
+  while((dent = readdir(dp)) != NULL) {
+    char newfn[PATH_MAX] = {0};
+    struct stat info;
+
+    if(dent->d_name[0] == '.')
+      continue;
+    snprintf(newfn, PATH_MAX, "%s/%s", fn, dent->d_name);
+    stat(newfn, &info);
+    if(S_ISDIR(info.st_mode)) {
+      continue;
+    }
+    DD("fn: %s\n", newfn);
+    cnt ++;
+  }
+  closedir(dp);
+  //DD("total media size %d\n", cnt);
+  return cnt;
+}
+
+void generate_mediainfo_by_jid(const char *jid) {
+  DIR *dp = NULL;
+  struct dirent *dent = NULL;
+  int cnt = 0;
+
+  dp = opendir(jid);
+
+  while((dent = readdir(dp)) != NULL) {
+    struct stat info;
+    char fn[PATH_MAX] = {0};
+
+    if(dent->d_name[0] == '.')
+      continue;
+
+    //DD("d_name = %s", dent->d_name);
+    snprintf(fn, PATH_MAX, "%s/%s", jid, dent->d_name);
+    stat(fn, &info);
+    if(S_ISDIR(info.st_mode)) {
+      //DD(" is directory\n");
+      cnt += list_media_files(fn);
+    } else {
+      //DD(" is file\n");
+      continue;
+    }
+  }
+  DD("total media size %d\n", cnt);
+
+  closedir(dp);
+}
+
 /**
  * Main callback from MHD, used to generate the page.
  *
@@ -482,6 +538,30 @@ static int generate_page (void *cls, struct MHD_Connection *connection,
 
   //DD("url = %s, method = %s\n", url, method);
   if (0 == strcmp (method, MHD_HTTP_METHOD_GET)) {
+    if(0 == strncmp(url, "/list/", 6)) {
+      char xmlfile[PATH_MAX] = {0};
+
+      generate_mediainfo_by_jid(url+6);
+      snprintf(xmlfile, PATH_MAX, "%s/%s.xml", url+6, url+6);
+      fd = open(xmlfile, O_RDONLY);
+
+      stat(xmlfile, &buf);
+      if(-1 == fd)
+        return MHD_queue_response(connection, MHD_HTTP_NOT_FOUND, file_not_found_response);
+
+
+      response = MHD_create_response_from_fd(buf.st_size, fd);
+       if(NULL == response) {
+         close(fd);
+         return MHD_NO;
+       }
+       MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/xml");
+
+       ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
+       MHD_destroy_response(response);
+       return ret;
+    }
+
     if(0 != strcmp(url, "/")) {
       char file_data[MAGIC_HEADER_SIZE];
       ssize_t got;
@@ -598,6 +678,9 @@ int main (int argc, char *const *argv) {
       fprintf (stderr, "%s PORT\n", argv[0]);
       return 1;
     }
+
+  //generate_mediainfo_by_jid("admin");
+  //return 0;
 
   base = event_base_new();
   magic = magic_open (MAGIC_MIME_TYPE);
