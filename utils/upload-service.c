@@ -461,24 +461,29 @@ void generate_thumbnail(char *input, char *output) {
   }
 }
 
-int list_media_files(char *fn) {
+int list_media_files(char *fn, FILE *fp) {
   DIR *dp = NULL;
   struct dirent *dent = NULL;
   int cnt = 0;
+  char xmlbuf[1024] = {0};
 
   dp = opendir(fn);
   while((dent = readdir(dp)) != NULL) {
     char newfn[PATH_MAX] = {0};
+    char thumbpath[1024] = {0};
     struct stat info;
 
     if(dent->d_name[0] == '.')
       continue;
     snprintf(newfn, PATH_MAX, "%s/%s", fn, dent->d_name);
+    snprintf(thumbpath, PATH_MAX, "%s/.thumb/%s", fn, dent->d_name);
     stat(newfn, &info);
     if(S_ISDIR(info.st_mode)) {
       continue;
     }
-    DD("fn: %s\n", newfn);
+    //DD("fn: %s\n", newfn);
+    snprintf(xmlbuf, 1024, "<item><thumb>%s</thumb><data>%s</data></item>", thumbpath, newfn);
+    fwrite(xmlbuf, 1, strlen(xmlbuf), fp);
     cnt ++;
   }
   closedir(dp);
@@ -486,13 +491,31 @@ int list_media_files(char *fn) {
   return cnt;
 }
 
+#define XML_HEADER  "<?xml version='1.0' encoding='UTF-8'?>"
+#define XML_HEADER_LEN (size_t)strlen(XML_HEADER)
+
+#define XML_MEDIAINFO_START "<mediainfo>"
+#define XML_MEDIAINFO_START_LEN (size_t)strlen(XML_MEDIAINFO_START)
+#define XML_MEDIAINFO_END "</mediainfo>"
+#define XML_MEDIAINFO_END_LEN (size_t)strlen(XML_MEDIAINFO_END)
+
 void generate_mediainfo_by_jid(const char *jid) {
   DIR *dp = NULL;
   struct dirent *dent = NULL;
-  int cnt = 0;
+  int cnt = 0, fd = 0;
+  char fn[PATH_MAX] = {0};
+  FILE *fp = NULL;
 
   dp = opendir(jid);
 
+  snprintf(fn, PATH_MAX, "%s/index.xml", jid);
+  fp = fopen(fn, "w");
+  if(fp == NULL) {
+    DD("generate %s failure\n", fn);
+  }
+
+  fwrite(XML_HEADER, 1, XML_HEADER_LEN, fp);
+  fwrite(XML_MEDIAINFO_START, 1, XML_MEDIAINFO_START_LEN, fp);
   while((dent = readdir(dp)) != NULL) {
     struct stat info;
     char fn[PATH_MAX] = {0};
@@ -505,15 +528,17 @@ void generate_mediainfo_by_jid(const char *jid) {
     stat(fn, &info);
     if(S_ISDIR(info.st_mode)) {
       //DD(" is directory\n");
-      cnt += list_media_files(fn);
+      cnt += list_media_files(fn, fp);
     } else {
       //DD(" is file\n");
       continue;
     }
   }
-  DD("total media size %d\n", cnt);
+  fwrite(XML_MEDIAINFO_END, 1, XML_MEDIAINFO_END_LEN, fp);
+  //DD("total media size %d\n", cnt);
 
   closedir(dp);
+  fclose(fp);
 }
 
 /**
@@ -679,8 +704,8 @@ int main (int argc, char *const *argv) {
       return 1;
     }
 
-  //generate_mediainfo_by_jid("admin");
-  //return 0;
+  generate_mediainfo_by_jid("admin");
+  return 0;
 
   base = event_base_new();
   magic = magic_open (MAGIC_MIME_TYPE);
