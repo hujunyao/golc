@@ -412,6 +412,7 @@ const char *get_mimetype(char *filename) {
   if(fd != -1)
     close(fd);
 
+  //DD("mime = %s, got = %d, fn = %s\n", mime, got, filename);
   return mime;
 }
 
@@ -465,13 +466,14 @@ int list_media_files(char *fn, FILE *fp) {
   DIR *dp = NULL;
   struct dirent *dent = NULL;
   int cnt = 0;
-  char xmlbuf[1024] = {0};
 
   dp = opendir(fn);
   while((dent = readdir(dp)) != NULL) {
     char newfn[PATH_MAX] = {0};
     char thumbpath[1024] = {0};
+    char xmlbuf[10240] = {0};
     struct stat info;
+    const char *mimetype = NULL;
 
     if(dent->d_name[0] == '.')
       continue;
@@ -481,8 +483,13 @@ int list_media_files(char *fn, FILE *fp) {
     if(S_ISDIR(info.st_mode)) {
       continue;
     }
-    //DD("fn: %s\n", newfn);
-    snprintf(xmlbuf, 1024, "<item><thumb>%s</thumb><data>%s</data></item>", thumbpath, newfn);
+    mimetype = get_mimetype(newfn);
+    //DD("fn: %s, mimetype=%s\n", newfn, get_mimetype(newfn));
+    if(mimetype) {
+      snprintf(xmlbuf, 10240, "<item><mimetype>%s</mimetype><thumb>%s</thumb><data>%s</data></item>", mimetype,thumbpath, newfn);
+    } else {
+      snprintf(xmlbuf, 10240, "<item><thumb>%s</thumb><data>%s</data></item>", thumbpath, newfn);
+    }
     fwrite(xmlbuf, 1, strlen(xmlbuf), fp);
     cnt ++;
   }
@@ -567,7 +574,7 @@ static int generate_page (void *cls, struct MHD_Connection *connection,
       char xmlfile[PATH_MAX] = {0};
 
       generate_mediainfo_by_jid(url+6);
-      snprintf(xmlfile, PATH_MAX, "%s/%s.xml", url+6, url+6);
+      snprintf(xmlfile, PATH_MAX, "%s/index.xml", url+6, url+6);
       fd = open(xmlfile, O_RDONLY);
 
       stat(xmlfile, &buf);
@@ -704,12 +711,10 @@ int main (int argc, char *const *argv) {
       return 1;
     }
 
-  generate_mediainfo_by_jid("admin");
-  return 0;
-
   base = event_base_new();
   magic = magic_open (MAGIC_MIME_TYPE);
   (void) magic_load (magic, NULL);
+
   (void) pthread_mutex_init (&mutex, NULL);
 
   file_not_found_response = MHD_create_response_from_buffer (strlen (FILE_NOT_FOUND_PAGE), (void *) FILE_NOT_FOUND_PAGE, MHD_RESPMEM_PERSISTENT);
