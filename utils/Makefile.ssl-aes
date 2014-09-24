@@ -1,0 +1,20 @@
+IMG=$(wildcard *.jpg)
+VID=$(wildcard *.mp4)
+IMGSRC=$(IMG:.jpg=.aesi)
+VIDSRC=$(VID:.mp4=.aesv)
+MAC=1C7B215EF6C3
+
+%.aesi : %.jpg
+#	openssl enc -aes-128-cbc -in $< -out $@ -pass pass:0008224a90f2
+	openssl enc -aes-128-cbc -in $< -out $@ -p -K $(MAC) -iv $(MAC)
+	adb push $@ /storage/sdcard0/cryptdata/
+%.aesv : %.mp4
+#	openssl enc -aes-128-cbc -in $< -out $@ -pass pass:0008224a90f2
+	openssl enc -aes-128-ecb -in $< -out $@ -K $(MAC) -iv $(MAC) 
+	adb push $@ /storage/sdcard0/cryptdata/
+
+res: $(IMGSRC) $(VIDSRC) 
+
+clean:
+	rm *.aesi
+	rm *.aesv
