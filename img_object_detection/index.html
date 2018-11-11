@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>
+Tensorflow Test
+</title>
+</head>
+<body>
+<script type="text/javascript">
+var xmlhttp;
+
+function get_camera0() {
+  var url = "http://127.0.0.1:8080/get/tensorflow/camera0";
+
+  xmlhttp=new XMLHttpRequest();
+  xmlhttp.open("GET", url, true);
+  xmlhttp.onload = gotensor_cb;
+  xmlhttp.send();
+}
+
+function gotensor_cb() {
+  console.log("gotensor_cb");
+  var json = xmlhttp.response;
+  var obj = JSON.parse(json);
+  console.log("JSON=" + json + "\n md5 = " + obj.md5 + "Recognition = " + JSON.stringify(obj.Recognition));
+
+  var tfoutout_json = "";
+  for(var idx in obj.Recognition) {
+    if(idx > 0) tfoutout_json += "<br>";
+    var output_idx = idx;
+    tfoutout_json += "T"+output_idx+"."+JSON.stringify(obj.Recognition[idx]);
+  }
+  document.getElementById("tfoutput.json").innerHTML = tfoutout_json;
+  document.getElementById("tfoutput").src = "/get/image/1/" + obj.md5;
+}
+
+</script>
+
+<style>
+img {
+  width: 100%;
+}
+</style>
+
+<h2>Tensorflow TEST</h2>
+<p></p>
+
+<button onclick="get_camera0()">GoTensor</button>
+<p></p>
+<hr>
+<p id="tfoutput.json"></p>
+<!--img id="tfoutput" src="tfoutput.jpg" alt="Tensorflow Output" style="width:1280px;height:720px;"-->
+<img id="tfoutput" src="tfoutput.jpg" alt="Tensorflow Output">
+</body>
+</html>
