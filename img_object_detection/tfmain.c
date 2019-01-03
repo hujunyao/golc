@@ -32,6 +32,7 @@
 #define DD(...) fprintf(stderr, __VA_ARGS__)
 
 #define UC_FPS 3
+#define SCORES_PASS 0.65f
 
 const char* USB_CAMERA_DEV = "/dev/video0";
 const char* TF_OUTPUT_DB = "/tmp/tfoutput.db";
@@ -42,7 +43,7 @@ struct yuv_buffer {
 };
 //const char* classes_name[] = {"dummy", "earsoup", "rice", "lacery", "octagon", "triangle", "small_shellw", "rect"};
 //const char* classes_name[] = {"dummy", "lacery", "triangle", "small_shellw" };
-const char* classes_name[] = {"dummy", "earsoup", "lacery", "octagon", "triangle", "rect"};
+const char* classes_name[] = {"dummy", "earsoup", "lacery", "octagon", "triangle", "rect", "rice", "egg"};
 #define CLASSES_NAME_SIZE sizeof(classes_name)/sizeof(const char*)
 
 const char* tensor_name[] = {"boxes", "scores", "classes", "count"};
@@ -291,16 +292,16 @@ static void draw_tfoutput_for_imgbuf(gotensor_t* go, cairo_t* cr, int output_idx
   cairo_stroke (cr);
 
   //cairo_set_source_rgba (cr, 0, 0, 0, 1.0);
-  cairo_set_source_rgba (cr, 0, 0, 0, scores + 0.25);
+  cairo_set_source_rgba (cr, 1, 1, 1, scores + 0.25);
   cairo_text_extents_t extents;
   //cairo_select_font_face(cr, "Serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
   cairo_select_font_face(cr, "Noto Mono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
   //cairo_select_font_face(cr, "Noto Mono", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_BOLD);
-  cairo_set_font_size (cr, 12.0);
+  cairo_set_font_size (cr, 32.0);
   if(classes >= 0 && classes < CLASSES_NAME_SIZE)
-    snprintf(scores_text, 256, "%s T%d.scores %.2f",classes_name[classes], output_idx, scores);
+    snprintf(scores_text, 256, "%s %.2f",classes_name[classes], scores);
   else
-    snprintf(scores_text, 256, "***%d*** T%d.scores %.2f", classes, output_idx, scores);
+    snprintf(scores_text, 256, "***%d*** %.2f", classes, scores);
   cairo_text_extents (cr, scores_text, &extents);
   //DD("extents(%f, %f, %f, %f)\n", extents.width, extents.height, extents.x_bearing, extents.y_bearing);
   tx = (x0 + x1)/2 - (extents.width/2 + extents.x_bearing); //x0 + (x1-x0)/2 - (extents.width/2 + extents.x_bearing);
@@ -400,7 +401,7 @@ void do_rgbimg_detection(gotensor_t* ptr, unsigned char* rgbbuf, int nbytes, int
         x0 *= width, x1 *= width;
         y0 *= height, y1 *= height;
 
-        if(scores > 0.6f) {
+        if(scores > SCORES_PASS) {
           const char* classes_name_str = "******";
           DD("oo_tensor[%d], scores = %.2f, classes %d, (%.2f, %.2f, %.2f, %.2f)\n", i, scores, classes, x0, y0, x1, y1);
           oocsv += sprintf(oocsv, "%d,%.3f,%.3f,%.3f,%.3f,%.3f;", classes, scores, x0, y0, x1, y1);
@@ -481,7 +482,7 @@ void do_jpegimg_detection_ex(gotensor_t* ptr, const char* jpegfn, tf_output_call
         x0 *= width, x1 *= width;
         y0 *= height, y1 *= height;
 
-        if(scores > 0.6f) {
+        if(scores > SCORES_PASS) {
           DD("oo_tensor[%d], scores = %.2f, classes %d, (%.2f, %.2f, %.2f, %.2f)\n", i, scores, classes, x0, y0, x1, y1);
           if(outputcb != NULL) {
             outputcb(data, scores, classes, x0, y0, x1, y1);
@@ -701,7 +702,7 @@ void do_image_detection(TF_Graph* graph,TF_Session* session, const char* jpegfn)
       x0 *= width, x1 *= width;
       y0 *= height, y1 *= height;
 
-      if(scores > 0.1f) {
+      if(scores > SCORES_PASS) {
         DD("oo_tensor[%d], scores = %.2f, classes %d, (%.2f, %.2f, %.2f, %.2f)\n", i, scores, classes, x0, y0, x1, y1);
       }
       boxes_data += 4;
